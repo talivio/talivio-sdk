@@ -1,0 +1,24 @@
+{
+    "name": "talivio/sdk",
+    "description": "Talivio Accounts SSO + central ops (error/support telemetry) for every Talivio product.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "laravel/socialite": "^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Talivio\\Sdk\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Talivio\\Sdk\\TalivioServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable"
+}
