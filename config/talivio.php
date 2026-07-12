@@ -23,4 +23,10 @@ return [
 
     // Where to send the user after a successful Talivio Accounts login.
     'login_redirect' => env('TALIVIO_LOGIN_REDIRECT', '/'),
+
+    // What to do with the local user when their Talivio account is deleted
+    // (GDPR cascade from the hub): 'delete' erases the local account too,
+    // 'unlink' keeps it but severs the SSO link (use when local accounts own
+    // business records that must survive).
+    'deletion_behavior' => env('TALIVIO_DELETION_BEHAVIOR', 'delete'),
 ];

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Socialite\Facades\Socialite;
 use Talivio\Sdk\Console\HeartbeatCommand;
+use Talivio\Sdk\Http\Controllers\AccountDeletionController;
 use Talivio\Sdk\Http\Controllers\SupportFormController;
 use Talivio\Sdk\Http\Controllers\TalivioAuthController;
 use Throwable;
@@ -53,7 +54,18 @@ class TalivioServiceProvider extends ServiceProvider
             Route::post('/talivio/support', [SupportFormController::class, 'store'])
                 ->middleware('throttle:5,1')
                 ->name('talivio.support.store');
+
+            Route::middleware('auth:'.config('talivio.guard'))->group(function () {
+                Route::get('/talivio/link', [TalivioAuthController::class, 'link'])->name('talivio.link');
+                Route::post('/talivio/unlink', [TalivioAuthController::class, 'unlink'])->name('talivio.unlink');
+            });
         });
+
+        // Server-to-server GDPR deletion callback from the hub — no session,
+        // no CSRF; authenticated by HMAC signature inside the controller.
+        Route::post('/talivio/account-deleted', AccountDeletionController::class)
+            ->middleware('throttle:30,1')
+            ->name('talivio.account-deleted');
     }
 
     /**
