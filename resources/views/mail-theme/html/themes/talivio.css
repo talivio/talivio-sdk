@@ -122,6 +122,12 @@ img {
     font-weight: 800;
 }
 
+.header-logo {
+    border: none;
+    max-height: 32px;
+    vertical-align: middle;
+}
+
 /* Brand row — inside the white content area, bottom edge: sender name on
    the left, "a Talivio product" tagline on the right. */
 

@@ -29,4 +29,17 @@ return [
     // 'unlink' keeps it but severs the SSO link (use when local accounts own
     // business records that must survive).
     'deletion_behavior' => env('TALIVIO_DELETION_BEHAVIOR', 'delete'),
+
+    // Shared mail theme (talivio/sdk registers it automatically — see
+    // TalivioServiceProvider::registerMailTheme()). Each product shows its
+    // own branding in the header: set brand_logo to a full URL of a PNG/JPG
+    // logo (SVG isn't reliably supported by email clients) to show that
+    // instead of the plain product-name text; brand_color tints the
+    // product-name text when no logo is set. Both are optional — unset
+    // means the previous plain black text.
+    'mail' => [
+        'brand_logo' => env('TALIVIO_MAIL_LOGO'),
+        'brand_logo_height' => env('TALIVIO_MAIL_LOGO_HEIGHT', 28),
+        'brand_color' => env('TALIVIO_MAIL_COLOR', '#0f172a'),
+    ],
 ];
