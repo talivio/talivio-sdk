@@ -26,6 +26,7 @@ class TalivioServiceProvider extends ServiceProvider
         $this->registerRoutes();
         $this->registerErrorReporting();
         $this->registerViews();
+        $this->registerMailTheme();
         $this->registerPublishing();
 
         if ($this->app->runningInConsole()) {
@@ -94,6 +95,28 @@ class TalivioServiceProvider extends ServiceProvider
     private function registerViews(): void
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'talivio');
+    }
+
+    /**
+     * Brands every Markdown mailable/notification (password resets, email
+     * verification, receipts, …) across all Talivio products with a shared
+     * look: the SDK's mail-theme dir is appended to Laravel's markdown mail
+     * paths (so a product's own resources/views/vendor/mail overrides still
+     * win), and the "talivio" CSS theme becomes the default unless the host
+     * app already picked a custom theme of its own.
+     */
+    private function registerMailTheme(): void
+    {
+        $paths = (array) config('mail.markdown.paths', []);
+
+        config(['mail.markdown.paths' => array_values(array_unique(array_merge(
+            $paths,
+            [__DIR__.'/../resources/views/mail-theme'],
+        )))]);
+
+        if (config('mail.markdown.theme', 'default') === 'default') {
+            config(['mail.markdown.theme' => 'talivio']);
+        }
     }
 
     private function registerPublishing(): void
