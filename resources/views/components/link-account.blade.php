@@ -27,8 +27,17 @@
 
 <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-white/10">
     <div class="flex items-center gap-3">
-        <svg width="28" height="28" viewBox="0 0 49.74 51.32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path fill="#3087ce" d="m49.626 11.564a.809.809 0 0 1 .028.209v10.972a.8.8 0 0 1 -.402.694l-9.209 5.302v10.509c0 .286-.152.55-.4.694l-19.223 11.079a.805.805 0 0 1 -.147.06c-.021.007-.04.02-.062.025a.8.8 0 0 1 -.41 0c-.025-.006-.048-.021-.072-.03a.8.8 0 0 1 -.14-.058l-19.219-11.076a.8.8 0 0 1 -.4-.694v-22.155a.8.8 0 0 1 .4-.694l19.219-11.079a.79.79 0 0 1 .753 0z"/>
+        <svg width="28" height="28" viewBox="0 0 101.67 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="dark:hidden">
+            <path fill="#0072CE" opacity=".8" d="M67.5 59.12V33.33H83a23.1 23.1 0 0 1 18.63 18.51v14.83H75a7.55 7.55 0 0 1-7.5-7.55z"/>
+            <path fill="#000000" d="M34.16 25.79V0h31.91a4.67 4.67 0 0 1 3.3 1.36l30.94 31a4.66 4.66 0 0 1 1.36 3.29v16.19A23.1 23.1 0 0 0 83 33.33H41.71a7.54 7.54 0 0 1-7.55-7.54z"/>
+            <path fill="#0072CE" opacity=".8" d="M34.18 40.88v25.79H18.64A23.12 23.12 0 0 1 0 48.16V33.33h26.63a7.55 7.55 0 0 1 7.55 7.55z"/>
+            <path fill="#000000" d="M67.51 74.21V100H35.6a4.66 4.66 0 0 1-3.29-1.36L1.36 67.69A4.66 4.66 0 0 1 0 64.4V48.16a23.12 23.12 0 0 0 18.64 18.51H60a7.54 7.54 0 0 1 7.51 7.54z"/>
+        </svg>
+        <svg width="28" height="28" viewBox="0 0 101.67 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="hidden dark:block">
+            <path fill="#ffffff" opacity=".8" d="M67.5 59.12V33.33H83a23.1 23.1 0 0 1 18.63 18.51v14.83H75a7.55 7.55 0 0 1-7.5-7.55z"/>
+            <path fill="#0072CE" d="M34.16 25.79V0h31.91a4.67 4.67 0 0 1 3.3 1.36l30.94 31a4.66 4.66 0 0 1 1.36 3.29v16.19A23.1 23.1 0 0 0 83 33.33H41.71a7.54 7.54 0 0 1-7.55-7.54z"/>
+            <path fill="#ffffff" opacity=".8" d="M34.18 40.88v25.79H18.64A23.12 23.12 0 0 1 0 48.16V33.33h26.63a7.55 7.55 0 0 1 7.55 7.55z"/>
+            <path fill="#0072CE" d="M67.51 74.21V100H35.6a4.66 4.66 0 0 1-3.29-1.36L1.36 67.69A4.66 4.66 0 0 1 0 64.4V48.16a23.12 23.12 0 0 0 18.64 18.51H60a7.54 7.54 0 0 1 7.51 7.54z"/>
         </svg>
         <div>
             <p class="text-sm font-semibold text-slate-900 dark:text-white">Talivio Accounts</p>
