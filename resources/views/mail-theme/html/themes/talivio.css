@@ -122,13 +122,27 @@ img {
     font-weight: 800;
 }
 
-.header-tagline {
-    color: #94a3b8;
-    font-size: 12px;
-    margin-top: 4px;
+/* "a Talivio product" tagline — bottom-right of the footer */
+
+.footer-tagline-cell {
+    padding-top: 12px;
 }
 
-.header-talivio {
+.footer a.footer-tagline {
+    color: #94a3b8;
+    font-size: 12px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.footer-tagline-icon {
+    display: inline-block;
+    height: 16px;
+    vertical-align: -3px;
+    width: 16px;
+}
+
+.footer-talivio {
     color: #3087ce;
     font-weight: 700;
 }
