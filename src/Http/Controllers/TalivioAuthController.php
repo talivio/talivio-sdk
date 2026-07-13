@@ -76,20 +76,22 @@ class TalivioAuthController extends Controller
         $user = $userModel::where($talivioIdColumn, $talivioUser->getId())->first();
 
         if (! $user) {
-            // Only auto-link to an existing local account when its email is
-            // already verified locally — otherwise create a fresh account.
-            $existing = $userModel::where('email', $talivioUser->getEmail())->first();
+            // Link to an existing local account by email if one exists —
+            // creating a new row here would collide with the email's unique
+            // constraint. Talivio Accounts already verified this email, so
+            // linking is safe regardless of the local row's prior
+            // verification state; only a genuinely new email creates a
+            // fresh account.
+            $user = $userModel::where('email', $talivioUser->getEmail())->first();
 
-            if ($existing && ($existing->email_verified_at ?? null)) {
-                $user = $existing;
-                $user->{$talivioIdColumn} = $talivioUser->getId();
-            } else {
+            if (! $user) {
                 $user = new $userModel;
-                $user->{$talivioIdColumn} = $talivioUser->getId();
                 $user->email = $talivioUser->getEmail();
-                $user->email_verified_at = now();
                 $user->password = Hash::make(Str::random(40));
             }
+
+            $user->{$talivioIdColumn} = $talivioUser->getId();
+            $user->email_verified_at = $user->email_verified_at ?? now();
         }
 
         // Keep the local profile in sync with Talivio Accounts on every login.
