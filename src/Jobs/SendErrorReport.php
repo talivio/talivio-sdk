@@ -15,12 +15,16 @@ class SendErrorReport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
-
-    public array $backoff = [5, 30, 120];
-
     public function __construct(public array $error) {}
 
+    /**
+     * Best-effort delivery only — this job must never surface a failure to
+     * the host app's own error tracker. Rethrowing here (even with retries)
+     * gets reported to Sentry by the queue worker on every failed attempt,
+     * which turns a single telemetry hiccup (hub down, bad ingest token)
+     * into a storm of unrelated "error reporting the error report failed"
+     * noise. One attempt, swallow anything that goes wrong.
+     */
     public function handle(): void
     {
         try {
@@ -34,13 +38,6 @@ class SendErrorReport implements ShouldQueue
             Log::channel(config('logging.default'))->debug('talivio/sdk: error report delivery failed', [
                 'message' => $e->getMessage(),
             ]);
-
-            throw $e;
         }
-    }
-
-    public function failed(): void
-    {
-        // Give up silently after retries — never impact the host app.
     }
 }
