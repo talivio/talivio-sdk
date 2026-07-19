@@ -14,6 +14,11 @@ return [
     'ingest_token' => env('TALIVIO_INGEST_TOKEN'),
     'telemetry_enabled' => env('TALIVIO_TELEMETRY_ENABLED', true),
 
+    // SDK, `talivio:heartbeat` komutunu 5 dakikada bir kendisi zamanlar; ürünün
+    // routes/console.php'sine elle satır eklemek gerekmez. Ürün zamanlamayı
+    // kendi devralmak isterse false yapıp kendi Schedule kaydını yazabilir.
+    'heartbeat_schedule' => env('TALIVIO_HEARTBEAT_SCHEDULE', true),
+
     // The guard/model this app authenticates its end users with.
     'guard' => env('TALIVIO_GUARD', 'web'),
     'user_model' => env('TALIVIO_USER_MODEL', \App\Models\User::class),

@@ -2,6 +2,7 @@
 
 namespace Talivio\Sdk;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -31,7 +32,33 @@ class TalivioServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([HeartbeatCommand::class]);
+            $this->scheduleHeartbeat();
         }
+    }
+
+    /**
+     * Heartbeat'i SDK'nın kendisi zamanlar. Önceden komut yalnızca kaydediliyor,
+     * zamanlaması her ürünün kendi `routes/console.php`'sine elle kopyalanıyordu
+     * — kopyalanmayan ürünler hiç sinyal göndermiyor, hub tarafındaki bekçi de
+     * onları sürekli "sustu" sanıyordu. Artık paketi kuran her ürün otomatik
+     * olarak sinyal verir.
+     *
+     * Token yoksa komut zaten no-op olduğu için geliştirme ortamında zararsızdır.
+     * Ürün zamanlamayı kendi devralmak isterse config'te `heartbeat_schedule`'ı
+     * false yapıp kendi Schedule kaydını yazar.
+     */
+    private function scheduleHeartbeat(): void
+    {
+        if (! config('talivio.heartbeat_schedule', true)) {
+            return;
+        }
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('talivio:heartbeat')
+                ->everyFiveMinutes()
+                ->withoutOverlapping()
+                ->runInBackground();
+        });
     }
 
     private function registerSocialiteDriver(): void
