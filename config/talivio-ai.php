@@ -59,4 +59,40 @@ return [
     | "neden bu yanıt böyle geldi" sorusu ancak bu kayıtla cevaplanır.
     */
     'log_usage' => (bool) env('TALIVIO_AI_LOG_USAGE', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Varsayılan kalite katmanı (tier)
+    |--------------------------------------------------------------------------
+    | ⚠️ MODEL ADI DEĞİL, TIER (talivio-ai ADR-04). Model seçimi ağ geçidinin
+    | kararı; hangi modelin ucuz/hızlı/yetenekli olduğu merkezde ÖLÇÜLÜYOR ve
+    | 18 projede ayrı ayrı güncellenmesi gerekmiyor.
+    */
+    'default_tier' => env('TALIVIO_AI_TIER', 'standard'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Göç (gölge koşu) — talivio-ai Faz 2
+    |--------------------------------------------------------------------------
+    | `primary`: hangi yolun SONUCU kullanılır — 'legacy' (ürünün eski, doğrudan
+    | sağlayıcı istemcisi) ya da 'gateway' (Talivio AI).
+    | `shadow`: diğer yol da çağrılıp çıktılar karşılaştırılsın mı?
+    |
+    | ⚠️ GÖLGE KOŞU HER ÇAĞRIYI İKİ KEZ ÖDETİR. Geçicidir: ölçüm temizse
+    | `primary` 'gateway' yapılır, sonra gölge kapatılır ve eski istemci silinir.
+    | "Karşılaştırmasız göç yapılmaz" kuralının bedeli budur ve görünür olması
+    | gerekir — ücretsiz sanmak, göç süresince faturayı sessizce ikiye katlardı.
+    */
+    'migration' => [
+        /*
+         * Ürünün ESKİ istemcisinin sınıf adı (ör. `App\Services\AI\GeminiClient`).
+         * Tanımlıysa `TextClient` sözleşmesine GÖLGE KOŞU bağlanır; boşsa
+         * doğrudan ağ geçidi bağlanır — yani göç bitmiş ürünlerde bu satır
+         * silinerek eski yol tamamen devre dışı kalıyor.
+         */
+        'legacy' => env('TALIVIO_AI_LEGACY_CLIENT'),
+
+        'primary' => env('TALIVIO_AI_PRIMARY', 'legacy'),
+        'shadow' => (bool) env('TALIVIO_AI_SHADOW', false),
+    ],
 ];

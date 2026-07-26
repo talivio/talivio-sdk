@@ -1,0 +1,151 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Talivio\Sdk\Ai\Migration;
+
+use Illuminate\Support\Facades\Log;
+use Talivio\Sdk\Ai\Contracts\TextClient;
+use Throwable;
+
+/**
+ * GÖLGE KOŞU: eski yol ile ağ geçidi aynı istemle çağrılır, çıktılar
+ * karşılaştırılır ve loglanır (talivio-ai Faz 2 kuralı: "karşılaştırmasız göç
+ * yapılmaz").
+ *
+ * NEDEN SDK'DA: bu katmanı her ürüne kopyalamak, göç etmeye çalıştığımız
+ * sorunun ta kendisi olurdu — envanterde aynı `GeminiClient` en az on projeye
+ * kopyalanmıştı ve kopyalar birbirinden sapmıştı (farklı varsayılan model,
+ * farklı hata mesajları). Göç aracının kendisi kopyalanırsa aynı sapma bu kez
+ * "gölge koşu" adıyla tekrarlanır.
+ *
+ * ⚠️ HANGİSİNİN SONUCU KULLANILIR: `talivio-ai.migration.primary`. Gölge yol
+ * yalnızca ÖLÇÜLÜR; hatası kullanıcıya ASLA yansımaz.
+ *
+ * ⚠️ BEDELİ AÇIK: her çağrı İKİ KEZ ödenir. Bu yüzden gölge koşu geçicidir ve
+ * bayrakla kapatılır. Ücretsiz sanmak, göç süresince faturayı sessizce ikiye
+ * katlardı.
+ */
+final class ShadowTextClient implements TextClient
+{
+    public function __construct(
+        private readonly TextClient $legacy,
+        private readonly TextClient $gateway,
+    ) {}
+
+    public function enabled(): bool
+    {
+        return $this->primary()->enabled();
+    }
+
+    public function model(): string
+    {
+        return $this->primary()->model();
+    }
+
+    public function generateText(string $prompt, ?string $system = null, array $opts = []): ?string
+    {
+        $primary = $this->primary()->generateText($prompt, $system, $opts);
+
+        $this->shadow(
+            fn (TextClient $c): ?string => $c->generateText($prompt, $system, $opts),
+            fn (?string $shadow): array => [
+                'birincil_uzunluk' => $primary === null ? null : mb_strlen($primary),
+                'golge_uzunluk' => $shadow === null ? null : mb_strlen($shadow),
+                'birincil_bos' => $primary === null,
+                'golge_bos' => $shadow === null,
+            ],
+            'text',
+        );
+
+        return $primary;
+    }
+
+    public function generateJson(string $prompt, ?string $system = null, array $opts = []): ?array
+    {
+        $primary = $this->primary()->generateJson($prompt, $system, $opts);
+
+        $this->shadow(
+            fn (TextClient $c): ?array => $c->generateJson($prompt, $system, $opts),
+            fn (?array $shadow): array => [
+                /*
+                 * ⚠️ İÇERİK LOGLANMAZ, YALNIZCA ŞEKİL. Destek biletleri ve
+                 * müşteri metinleri kişisel veri taşıyor; karşılaştırma için
+                 * anahtar listesi yeterli. İçeriği loglamak, göç ölçümünü bir
+                 * veri sızıntısına çevirirdi (talivio-ai ADR-19'un ruhu).
+                 */
+                'birincil_anahtarlar' => $primary === null ? null : array_keys($primary),
+                'golge_anahtarlar' => $shadow === null ? null : array_keys($shadow),
+                'ayni_anahtarlar' => $primary !== null && $shadow !== null
+                    && array_keys($primary) === array_keys($shadow),
+                'birincil_bos' => $primary === null,
+                'golge_bos' => $shadow === null,
+            ],
+            'json',
+        );
+
+        return $primary;
+    }
+
+    /**
+     * Gölge çağrıyı çalıştırır ve SONUCU ATAR.
+     *
+     * @param  callable(TextClient): mixed  $run
+     * @param  callable(mixed): array<string, mixed>  $compare
+     */
+    private function shadow(callable $run, callable $compare, string $kind): void
+    {
+        $secondary = $this->secondary();
+
+        if ($secondary === null) {
+            return;
+        }
+
+        $startedAt = microtime(true);
+
+        try {
+            $shadow = $run($secondary);
+        } catch (Throwable $e) {
+            /*
+             * Gölge yolun hatası ASLA yukarı sızmaz. Sızsaydı, göç ölçümü
+             * çalışan bir ürünü bozardı — ve göçün amacı tam tersi.
+             */
+            Log::warning('ai.golge_hata', [
+                'tur' => $kind,
+                'mesaj' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+
+            return;
+        }
+
+        Log::info('ai.golge_karsilastirma', [
+            'tur' => $kind,
+            'birincil_yol' => $this->primaryName(),
+            'golge_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ...$compare($shadow),
+        ]);
+    }
+
+    private function primary(): TextClient
+    {
+        return $this->primaryName() === 'gateway' ? $this->gateway : $this->legacy;
+    }
+
+    private function secondary(): ?TextClient
+    {
+        if (! config('talivio-ai.migration.shadow', false)) {
+            return null;
+        }
+
+        $secondary = $this->primaryName() === 'gateway' ? $this->legacy : $this->gateway;
+
+        // Yapılandırılmamış bir gölge yolu çağırmak, her istekte boş bir
+        // karşılaştırma satırı üretirdi.
+        return $secondary->enabled() ? $secondary : null;
+    }
+
+    private function primaryName(): string
+    {
+        return (string) config('talivio-ai.migration.primary', 'legacy');
+    }
+}

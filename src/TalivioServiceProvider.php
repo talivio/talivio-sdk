@@ -11,8 +11,11 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Socialite\Facades\Socialite;
 use Talivio\Sdk\Ai\CircuitBreaker;
 use Talivio\Sdk\Ai\Contracts\DegradationStrategy;
+use Talivio\Sdk\Ai\Contracts\TextClient;
 use Talivio\Sdk\Ai\Contracts\Transport;
 use Talivio\Sdk\Ai\Degradation\DisableFeature;
+use Talivio\Sdk\Ai\GatewayTextClient;
+use Talivio\Sdk\Ai\Migration\ShadowTextClient;
 use Talivio\Sdk\Ai\TalivioAi;
 use Talivio\Sdk\Ai\Transports\FakeTransport;
 use Talivio\Sdk\Ai\Transports\HttpTransport;
@@ -120,6 +123,30 @@ class TalivioServiceProvider extends ServiceProvider
             (int) config('talivio-ai.degradation.breaker_failures'),
             (int) config('talivio-ai.degradation.breaker_cooldown_seconds'),
         ));
+
+        $this->app->singleton(GatewayTextClient::class, fn ($app): GatewayTextClient => new GatewayTextClient(
+            $app->make(TalivioAi::class),
+        ));
+
+        /*
+         * `TextClient` sözleşmesi göç durumuna göre bağlanır (talivio-ai
+         * Faz 2). Ürün, eski istemcisini `talivio-ai.migration.legacy` ile
+         * bildiriyorsa GÖLGE KOŞU devreye giriyor; bildirmiyorsa doğrudan ağ
+         * geçidi bağlanıyor.
+         *
+         * ⚠️ Bu bağlama ürünün kendi sınıfını EZMEZ: ürün `TextClient`'ı
+         * kendisi bağlarsa (ör. özel bir sarmalayıcı) o kazanır — `bind`
+         * sırası ürünün service provider'ında sonradır.
+         */
+        $this->app->bind(TextClient::class, function ($app): TextClient {
+            $legacy = config('talivio-ai.migration.legacy');
+
+            if (! is_string($legacy) || ! class_exists($legacy)) {
+                return $app->make(GatewayTextClient::class);
+            }
+
+            return new ShadowTextClient($app->make($legacy), $app->make(GatewayTextClient::class));
+        });
 
         $this->app->singleton(TalivioAi::class, fn ($app): TalivioAi => new TalivioAi(
             $app->make(Transport::class),
