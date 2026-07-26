@@ -1,5 +1,11 @@
-@props(['label' => 'Talivio Accounts ile devam et'])
-<a href="{{ route('talivio.login') }}"
+{{--
+    `href` ile hedef değiştirilebilir: bazı ürünler SDK'nın hazır callback'ini
+    kullanamıyor (ör. talivio-ai, davet + 2FA katmanlarını korumak için kendi
+    akışını kuruyor). Butonun görünümü tek yerde kalsın diye ikonu kopyalamak
+    yerine hedefi parametreleştiriyoruz.
+--}}
+@props(['label' => 'Talivio Accounts ile devam et', 'href' => null])
+<a href="{{ $href ?? route('talivio.login') }}"
    {{ $attributes->merge(['class' => 'inline-flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10']) }}>
     <svg width="18" height="18" viewBox="0 0 101.67 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="dark:hidden">
         <path fill="#0072CE" opacity=".8" d="M67.5 59.12V33.33H83a23.1 23.1 0 0 1 18.63 18.51v14.83H75a7.55 7.55 0 0 1-7.5-7.55z"/>
