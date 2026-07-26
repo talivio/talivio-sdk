@@ -3,10 +3,19 @@
 namespace Talivio\Sdk;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Socialite\Facades\Socialite;
+use Talivio\Sdk\Ai\CircuitBreaker;
+use Talivio\Sdk\Ai\Contracts\DegradationStrategy;
+use Talivio\Sdk\Ai\Contracts\Transport;
+use Talivio\Sdk\Ai\Degradation\DisableFeature;
+use Talivio\Sdk\Ai\TalivioAi;
+use Talivio\Sdk\Ai\Transports\FakeTransport;
+use Talivio\Sdk\Ai\Transports\HttpTransport;
 use Talivio\Sdk\Console\HeartbeatCommand;
 use Talivio\Sdk\Http\Controllers\AccountDeletionController;
 use Talivio\Sdk\Http\Controllers\SupportFormController;
@@ -18,6 +27,17 @@ class TalivioServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/talivio.php', 'talivio');
+
+        /*
+         * Talivio AI ağ geçidi istemcisi (talivio-ai ROADMAP ADR-02/ADR-03).
+         *
+         * NEDEN SDK'NIN İÇİNDE: SDK zaten HER Talivio ürününde kurulu ve
+         * "merkezî ops" sorumluluğunu taşıyor (SSO + telemetri). AI istemcisi
+         * de aynı kategoride — ayrı bir paket, 18 projeye ikinci bir
+         * bağımlılık ve ikinci bir sürüm döngüsü eklerdi. Envanterde ölçülen
+         * asıl sorun buydu: aynı GeminiClient en az 10 projeye kopyalanmıştı.
+         */
+        $this->registerAi();
         $this->app->singleton(ErrorReporter::class);
     }
 
@@ -59,6 +79,55 @@ class TalivioServiceProvider extends ServiceProvider
                 ->withoutOverlapping()
                 ->runInBackground();
         });
+    }
+
+    /**
+     * AI istemcisi — ağ geçidine bağlanan tek katman.
+     *
+     * ⚠️ Sağlayıcıya DOĞRUDAN yol yok (ADR-17): burada yalnızca ağ geçidinin
+     * adresi ve anahtarı var. Ağ geçidi erişilemezse ürün AI'sız çalışmaya
+     * devam eder (), kendi başına sağlayıcıya gitmez.
+     */
+    private function registerAi(): void
+    {
+        $this->mergeConfigFrom(__DIR__.'/../config/talivio-ai.php', 'talivio-ai');
+
+        /*
+         * Taşıma sürücüsü yapılandırmadan seçilir. `fake` varsayılanı TEST
+         * ortamı içindir: ürünlerin test paketi ağ geçidine çıkarsa testler
+         * ağa, gecikmeye ve bütçeye bağımlı hâle gelir.
+         */
+        $this->app->singleton(Transport::class, function ($app): Transport {
+            if (config('talivio-ai.driver') === 'fake') {
+                return new FakeTransport;
+            }
+
+            return new HttpTransport(
+                $app->make(HttpFactory::class),
+                (string) config('talivio-ai.base_url'),
+                config('talivio-ai.key'),
+                (int) config('talivio-ai.timeout'),
+                (int) config('talivio-ai.connect_timeout'),
+            );
+        });
+
+        // Varsayılan bozulma davranışı: özellik sessizce kapanır. Şablon yedeği
+        // ürüne göre yanlış olabilir; ürün kendi stratejisini bağlar.
+        $this->app->bind(DegradationStrategy::class, DisableFeature::class);
+
+        $this->app->singleton(CircuitBreaker::class, fn ($app): CircuitBreaker => new CircuitBreaker(
+            $app->make(CacheRepository::class),
+            (int) config('talivio-ai.degradation.breaker_failures'),
+            (int) config('talivio-ai.degradation.breaker_cooldown_seconds'),
+        ));
+
+        $this->app->singleton(TalivioAi::class, fn ($app): TalivioAi => new TalivioAi(
+            $app->make(Transport::class),
+            $app->make(CircuitBreaker::class),
+            $app->make(DegradationStrategy::class),
+            (int) config('talivio-ai.degradation.retries'),
+            (bool) config('talivio-ai.log_usage'),
+        ));
     }
 
     private function registerSocialiteDriver(): void
@@ -159,5 +228,11 @@ class TalivioServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../database/migrations/add_talivio_id_to_users_table.php.stub' => database_path('migrations/'.date('Y_m_d_His', time()).'_add_talivio_id_to_users_table.php'),
         ], 'talivio-migrations');
+
+        // AI istemcisinin yapılandırması ayrı yayınlanır: SSO kullanan ama AI
+        // kullanmayan bir ürünün config dizinine gereksiz dosya düşmesin.
+        $this->publishes([
+            __DIR__.'/../config/talivio-ai.php' => config_path('talivio-ai.php'),
+        ], 'talivio-ai-config');
     }
 }
