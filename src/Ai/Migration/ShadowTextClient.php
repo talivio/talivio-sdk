@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Talivio\Sdk\Ai\Migration;
 
 use Illuminate\Support\Facades\Log;
+use Psr\Log\LoggerInterface;
 use Talivio\Sdk\Ai\Contracts\TextClient;
 use Throwable;
 
@@ -110,7 +111,7 @@ final class ShadowTextClient implements TextClient
              * Gölge yolun hatası ASLA yukarı sızmaz. Sızsaydı, göç ölçümü
              * çalışan bir ürünü bozardı — ve göçün amacı tam tersi.
              */
-            Log::warning('ai.golge_hata', [
+            $this->log()->warning('ai.golge_hata', [
                 'tur' => $kind,
                 'mesaj' => mb_substr($e->getMessage(), 0, 200),
             ]);
@@ -118,11 +119,34 @@ final class ShadowTextClient implements TextClient
             return;
         }
 
-        Log::info('ai.golge_karsilastirma', [
+        $this->log()->info('ai.golge_karsilastirma', [
             'tur' => $kind,
             'birincil_yol' => $this->primaryName(),
             'golge_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ...$compare($shadow),
+        ]);
+    }
+
+    /**
+     * Göç ölçümü KENDİ KANALINA yazar.
+     *
+     * ⚠️ ÜRETİMDE `LOG_LEVEL=error` OLABİLİR (vatlio'da öyleydi, 2026-07-26):
+     * `Log::info` ile yazılan karşılaştırma satırları hiç kaydedilmiyordu ve
+     * gölge koşu "çalışmıyor" gibi görünüyordu — oysa çalışıyordu, ölçümü
+     * göremiyorduk. Ölçümü uygulamanın log seviyesine bağlamak, göçün tek
+     * çıktısını sessizce yok eder.
+     *
+     * Kanal runtime'da kuruluyor: ürünlerin `config/logging.php`'sine dokunmak
+     * 18 projede 18 ayrı düzenleme demek olurdu.
+     */
+    private function log(): LoggerInterface
+    {
+        return Log::build([
+            'driver' => 'daily',
+            'path' => storage_path('logs/ai-migration.log'),
+            'level' => 'info',
+            // Göç geçici: iki hafta, karar vermeye fazlasıyla yeter.
+            'days' => 14,
         ]);
     }
 
