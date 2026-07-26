@@ -15,6 +15,7 @@ use Talivio\Sdk\Ai\Contracts\TextClient;
 use Talivio\Sdk\Ai\Contracts\Transport;
 use Talivio\Sdk\Ai\Degradation\DisableFeature;
 use Talivio\Sdk\Ai\GatewayTextClient;
+use Talivio\Sdk\Ai\Migration\MigrationReportCommand;
 use Talivio\Sdk\Ai\Migration\ShadowTextClient;
 use Talivio\Sdk\Ai\TalivioAi;
 use Talivio\Sdk\Ai\Transports\FakeTransport;
@@ -54,7 +55,7 @@ class TalivioServiceProvider extends ServiceProvider
         $this->registerPublishing();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([HeartbeatCommand::class]);
+            $this->commands([HeartbeatCommand::class, MigrationReportCommand::class]);
             $this->scheduleHeartbeat();
         }
     }
