@@ -45,6 +45,13 @@
 
     ⚠️ Alt bilginin son pikselleri kaydırılamıyorsa sebep burası değil: gövdeye
     `h-full` (height:100%) yazan kabuk. Belge sayfaları `min-h-full` olmalı.
+
+    ⚠️ SOLUK METİN `text-neutral-400`, 500 DEĞİL. 500 bu koyu şeritte 4.18:1
+    veriyor ve WCAG AA'nın 4.5:1 eşiğini geçemiyor (2026-07-27'de canlıda
+    ölçüldü); 400 ile 7.85:1'e çıkıyor. Tek ton koyulaştırmak "daha zarif"
+    görünür ama alt bilgi 20 küsur üründe basılıyor — buradaki bir tık, aynı
+    hatayı yirmi yerde birden üretir. Adres, telif ve "Talivio yapımı"
+    satırları bu yüzden 400.
 --}}
 @props([
     'product' => null,
@@ -158,15 +165,15 @@
                 <ul class="mt-4 space-y-3 text-sm">
                     <li><a href="tel:+37282721454" class="transition hover:text-brand-300">+372 8272 1454</a></li>
                     <li><a href="mailto:info@talivio.com" class="transition hover:text-brand-300">info@talivio.com</a></li>
-                    <li class="leading-relaxed text-neutral-500">Harju, Tallinn, Ahtri tn 12, 15551</li>
+                    <li class="leading-relaxed text-neutral-400">Harju, Tallinn, Ahtri tn 12, 15551</li>
                 </ul>
             </div>
         </div>
 
         <div class="mt-14 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-8 sm:flex-row">
-            <p class="text-sm text-neutral-500">{{ __('talivio::footer.rights_company', ['year' => date('Y')]) }}</p>
+            <p class="text-sm text-neutral-400">{{ __('talivio::footer.rights_company', ['year' => date('Y')]) }}</p>
 
-            <p class="flex items-center gap-2 text-xs text-neutral-500">
+            <p class="flex items-center gap-2 text-xs text-neutral-400">
                 {{ __('talivio::footer.made_by') }}
                 <a href="https://talivio.com" class="inline-flex items-center gap-1.5 font-semibold text-neutral-300 transition hover:text-white">
                     <x-talivio::logo class="h-4 w-4" :on-dark="true" />
