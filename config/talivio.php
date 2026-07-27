@@ -13,6 +13,17 @@ return [
     // Ingest token for error/support telemetry (from the same Filament resource).
     'ingest_token' => env('TALIVIO_INGEST_TOKEN'),
     'telemetry_enabled' => env('TALIVIO_TELEMETRY_ENABLED', true),
+    'ingest_timeout' => env('TALIVIO_INGEST_TIMEOUT', 5),
+
+    // Hub'dan gelen GDPR silme çağrısının HMAC anahtarı.
+    //
+    // Boşsa `ingest_token`'a geri düşülür — bugüne kadarki davranış buydu ve
+    // tüm ürünler öyle çalışıyor. AYRILMASININ SEBEBİ: ingest token'ı hub'da
+    // artık hash'li saklanıyor (panelden okunamıyor) ve döndürülebilir; imza
+    // anahtarı ona bağlı kalsaydı her token yenilemesi uçuştaki silme
+    // çağrılarını doğrulanamaz hâle getirirdi. Hub bu değeri ürün başına
+    // üretir; ürün tarafında tanımlanana kadar geri dönüş çalışmaya devam eder.
+    'webhook_secret' => env('TALIVIO_WEBHOOK_SECRET'),
 
     // SDK, `talivio:heartbeat` komutunu 5 dakikada bir kendisi zamanlar; ürünün
     // routes/console.php'sine elle satır eklemek gerekmez. Ürün zamanlamayı

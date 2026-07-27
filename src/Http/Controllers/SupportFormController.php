@@ -5,11 +5,11 @@ namespace Talivio\Sdk\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
+use Talivio\Sdk\Ingest\IngestClient;
 
 class SupportFormController extends Controller
 {
-    public function store(Request $request)
+    public function store(Request $request, IngestClient $ingest)
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -22,12 +22,19 @@ class SupportFormController extends Controller
         $user = Auth::guard(config('talivio.guard'))->user();
         $data['talivio_id'] = $user?->{config('talivio.talivio_id_column')};
 
-        $response = Http::withToken(config('talivio.ingest_token'))
-            ->timeout(5)
-            ->post(rtrim(config('talivio.hub_url'), '/').'/api/ingest/tickets', $data);
-
-        if ($response->failed()) {
-            return back()->withErrors(['message' => 'Destek talebiniz gönderilemedi, lütfen tekrar deneyin.']);
+        /*
+         * ⚠️ Bu kontrolün doğru çalışması IngestClient'ın `acceptJson()`
+         * göndermesine bağlı. Başlıksızken hub'ın doğrulama reddi 302'ye
+         * dönüşüyor, `failed()` false kalıyor ve kullanıcıya "talebiniz alındı"
+         * deniyordu — oysa hub'da hiçbir kayıt oluşmuyordu. Bir destek
+         * formunun sessizce yutulması, kullanıcının cevap beklerken ortada
+         * kalması demek; telemetrinin aksine bu yol fail-safe DEĞİL, görünür
+         * olmalı.
+         */
+        if (! $ingest->send('tickets', $data)) {
+            return back()
+                ->withInput()
+                ->withErrors(['message' => 'Destek talebiniz gönderilemedi, lütfen tekrar deneyin.']);
         }
 
         return back()->with('status', 'support-ticket-sent');

@@ -23,6 +23,8 @@ use Talivio\Sdk\Ai\Transports\FakeTransport;
 use Talivio\Sdk\Ai\Transports\HttpTransport;
 use Talivio\Sdk\Console\HeartbeatCommand;
 use Talivio\Sdk\Http\Controllers\AccountDeletionController;
+use Talivio\Sdk\Ingest\IngestClient;
+use Talivio\Sdk\Ingest\TalivioOps;
 use Talivio\Sdk\Http\Controllers\SupportFormController;
 use Talivio\Sdk\Http\Controllers\TalivioAuthController;
 use Throwable;
@@ -44,6 +46,11 @@ class TalivioServiceProvider extends ServiceProvider
          */
         $this->registerAi();
         $this->app->singleton(ErrorReporter::class);
+
+        // Tüm /api/ingest/* trafiğinin tek çıkışı. Singleton çünkü durumu yok
+        // ve hem kuyruk işi hem HTTP isteği içinden çözülüyor.
+        $this->app->singleton(IngestClient::class);
+        $this->app->singleton(TalivioOps::class);
     }
 
     public function boot(): void

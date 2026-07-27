@@ -39,7 +39,19 @@ TALIVIO_HUB_URL=https://talivio.com
 TALIVIO_CLIENT_ID=...
 TALIVIO_CLIENT_SECRET=...
 TALIVIO_INGEST_TOKEN=...
+TALIVIO_WEBHOOK_SECRET=...
 ```
+
+⚠️ **`TALIVIO_INGEST_TOKEN` olmadan telemetri tamamen sessizdir** — hata da log
+da üretmez, ürün panelde hiç var olmamış gibi görünür. Denetimde 11 ürünün SDK'yı
+kurup bu anahtarı hiç tanımlamadığı, dolayısıyla aylardır hiçbir şey göndermediği
+ortaya çıktı. Kurulumdan sonra `php artisan talivio:heartbeat -v` ile bir kez
+doğrulayın.
+
+`TALIVIO_WEBHOOK_SECRET` GDPR silme çağrısının imza anahtarıdır. Tanımlanmazsa
+`TALIVIO_INGEST_TOKEN`'a geri düşülür (eski davranış), ama hub artık ingest
+token'ını hash'li sakladığı ve döndürülebilir yaptığı için ayrı bir anahtar
+kullanmak gerekir.
 
 4. **Add the button** to your login/register Blade views:
 
@@ -47,15 +59,59 @@ TALIVIO_INGEST_TOKEN=...
 <x-talivio::accounts-button />
 ```
 
-5. **Error telemetry and heartbeat** work with zero extra code — the package hooks into your app's own exception handler automatically. Schedule the heartbeat in `routes/console.php`:
-
-```php
-Schedule::command('talivio:heartbeat')->everyFiveMinutes();
-```
+5. **Error telemetry and heartbeat** work with zero extra code — the package
+hooks into your app's own exception handler automatically, **and schedules the
+heartbeat itself** (v1.10.0'dan beri, 5 dakikada bir). `routes/console.php`'ye
+elle satır eklemeyin: SDK'nın zamanlamasıyla çakışır ve heartbeat iki kez gider.
+Zamanlamayı devralmak isterseniz `config/talivio.php`'de
+`heartbeat_schedule => false` yapın.
 
 6. **Support form** (optional): drop `<x-talivio::support-form />` anywhere.
+`:priority="true"` verirseniz öncelik seçici de çıkar.
 
 That's it — login button, error logs, and support tickets all show up in talivio.com's "Talivio Accounts" / "Talivio Ops" admin panels.
+
+## İş olayları — üyelik, abonelik, satış, başvuru
+
+Hata ve destek telemetrisi kendiliğinden akar; **iş olaylarını ürün gönderir.**
+Bunlar panelin "Talivio Ops" bölümündeki Üyelikler / Abonelikler / Satışlar /
+Üyelik Başvuruları listelerini ve dashboard'daki gelir kutucuklarını besler.
+
+```php
+use Talivio\Sdk\Facades\TalivioOps;
+
+// Ödeme sağlayıcınızın webhook handler'ında:
+TalivioOps::sale([
+    'external_id' => $charge->id,      // zorunlu — tekilleştirme anahtarı
+    'status' => 'paid',                 // zorunlu
+    'customer_email' => $charge->email,
+    'amount' => $charge->amount / 100,
+    'currency' => 'EUR',
+    'provider' => 'stripe',
+    'purchased_at' => now(),
+]);
+```
+
+Dört metot da `(application_id, external_id)` üzerinden **upsert** yapar: aynı
+olayı her durum değişiminde yeniden göndermek güvenlidir, çift kayıt oluşmaz.
+
+| Metot | Uç | Zorunlu alanlar |
+|---|---|---|
+| `TalivioOps::member()` | `/api/ingest/members` | `external_id`, `kind`, `status` |
+| `TalivioOps::subscription()` | `/api/ingest/subscriptions` | `external_id`, `status` |
+| `TalivioOps::sale()` | `/api/ingest/sales` | `external_id`, `status` |
+| `TalivioOps::signupApplication()` | `/api/ingest/signup-applications` | `external_id`, `email`, `full_name`, `status` |
+
+`kind` yalnızca `signup` | `application` | `install` | `manual` olabilir.
+
+**Hata davranışı ikiye ayrılır:** eksik zorunlu alan `InvalidArgumentException`
+atar (programlama hatasıdır, geliştirmede görülmeli); ağ/HTTP hatası `false`
+döndürür ve loglanır (hub'ın kapalı olması ödeme akışınızı kırmamalı).
+
+`status` ürüne özgü serbest metindir, ama panelin filtreleri ve gelir toplamları
+hub'daki `config/talivio-statuses.php` sözlüğüne bakar. Sözlükte olmayan bir
+yazım kullanırsanız kayıt görünür ama **MRR toplamına girmez** — yeni bir durum
+adı gerekiyorsa önce sözlüğe ekleyin.
 
 ## Design language (from v1.12.0, split into primitives + components in v1.17.0)
 
@@ -177,8 +233,13 @@ black — exactly what happened in ai.talivio.com's footer.
 When a user permanently deletes their Talivio account on talivio.com, the hub
 POSTs to this product's `/talivio/account-deleted` endpoint (registered
 automatically by the SDK). The request is signed with HMAC-SHA256 over
-`"{timestamp}.{body}"` using the product's ingest token as the shared secret,
-with a ±5 minute timestamp tolerance against replays.
+`"{timestamp}.{body}"` using the product's `TALIVIO_WEBHOOK_SECRET` as the
+shared secret, with a ±5 minute timestamp tolerance against replays.
+
+Anahtar tanımlı değilse `TALIVIO_INGEST_TOKEN` ile doğrulamaya geri düşülür.
+İki anahtar da denendiği için ürünler sıra bağımsız güncellenebilir; ama ingest
+token'ı hub'da artık hash'li saklandığı ve döndürülebilir olduğu için geri
+dönüş kalıcı bir çözüm değildir — imza anahtarı ayrı olmalı.
 
 Default behavior is to **delete** the local user whose `talivio_id` matches.
 If your product's local accounts own business records that must survive

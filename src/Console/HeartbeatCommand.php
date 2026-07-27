@@ -3,7 +3,7 @@
 namespace Talivio\Sdk\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
+use Talivio\Sdk\Ingest\IngestClient;
 
 class HeartbeatCommand extends Command
 {
@@ -11,19 +11,22 @@ class HeartbeatCommand extends Command
 
     protected $description = 'Ping the Talivio Ops dashboard so this product shows as "alive".';
 
-    public function handle(): int
+    public function handle(IngestClient $ingest): int
     {
-        if (! config('talivio.ingest_token')) {
+        /*
+         * `telemetry_enabled` kontrolü eskiden burada YOKTU: bayrak kapalıyken
+         * de ürün 5 dakikada bir hub'a gidiyordu. Hub zaten reddediyordu
+         * (AuthenticateIngestToken aynı bayrağı Application satırında arar),
+         * yani sonuç boşa giden istek ve "gönderiyorum ama alınmıyor" gibi
+         * yanıltıcı bir durumdu. Artık iki taraf aynı bayrağa saygı duyuyor.
+         */
+        if (! config('talivio.telemetry_enabled') || ! $ingest->configured()) {
             return self::SUCCESS;
         }
 
-        try {
-            Http::withToken(config('talivio.ingest_token'))
-                ->timeout(5)
-                ->post(rtrim(config('talivio.hub_url'), '/').'/api/ingest/heartbeat');
-        } catch (\Throwable) {
-            // Fail silently — a missed heartbeat just shows as "last seen" lag.
-        }
+        // Kaçan bir heartbeat yalnızca "son görülme" gecikmesi demektir; komut
+        // asla başarısız dönmez ki scheduler çıktısı gürültüye boğulmasın.
+        $ingest->send('heartbeat');
 
         return self::SUCCESS;
     }

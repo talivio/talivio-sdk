@@ -7,9 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Throwable;
+use Talivio\Sdk\Ingest\IngestClient;
 
 class SendErrorReport implements ShouldQueue
 {
@@ -24,20 +22,15 @@ class SendErrorReport implements ShouldQueue
      * which turns a single telemetry hiccup (hub down, bad ingest token)
      * into a storm of unrelated "error reporting the error report failed"
      * noise. One attempt, swallow anything that goes wrong.
+     *
+     * Yutma davranışı korundu, GÖRÜNMEZLİK korunmadı: IngestClient
+     * başarısızlığı `warning` seviyesinde loglar (eskiden `debug` idi ve
+     * üretimdeki varsayılan LOG_LEVEL altında hiç görünmüyordu), ve
+     * `acceptJson()` sayesinde hub'ın reddettiği rapor artık 302 yerine 422
+     * dönüyor — yani reddedilme gerçekten başarısızlık olarak görülüyor.
      */
-    public function handle(): void
+    public function handle(IngestClient $ingest): void
     {
-        try {
-            Http::withToken(config('talivio.ingest_token'))
-                ->timeout(5)
-                ->post(rtrim(config('talivio.hub_url'), '/').'/api/ingest/errors', [
-                    'errors' => [$this->error],
-                ])
-                ->throw();
-        } catch (Throwable $e) {
-            Log::channel(config('logging.default'))->debug('talivio/sdk: error report delivery failed', [
-                'message' => $e->getMessage(),
-            ]);
-        }
+        $ingest->send('errors', ['errors' => [$this->error]]);
     }
 }

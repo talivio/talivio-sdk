@@ -18,7 +18,10 @@
         "laravel": {
             "providers": [
                 "Talivio\\Sdk\\TalivioServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "TalivioOps": "Talivio\\Sdk\\Facades\\TalivioOps"
+            }
         }
     },
     "minimum-stability": "stable"

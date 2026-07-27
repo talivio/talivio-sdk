@@ -22,9 +22,20 @@ class AccountDeletionController extends Controller
 
     public function __invoke(Request $request)
     {
-        $secret = config('talivio.ingest_token');
+        /*
+         * İki anahtar da kabul edilir ve bu GEÇİŞ İÇİN bilinçli: hub artık
+         * ürün başına ayrı bir `webhook_secret` üretiyor, ama tüm ürünler
+         * güncellenip .env'lerine o değeri alana kadar eski `ingest_token`
+         * imzası geçerli kalmalı. Aksi hâlde SDK'yı güncelleyen ilk ürün
+         * silme çağrılarını reddetmeye başlardı. Her iki anahtar da
+         * denendiği için sıra bağımsız güncelleme mümkün.
+         */
+        $secrets = array_values(array_filter([
+            config('talivio.webhook_secret'),
+            config('talivio.ingest_token'),
+        ]));
 
-        if (! $secret) {
+        if ($secrets === []) {
             return response()->json(['status' => 'not_configured'], 503);
         }
 
@@ -39,9 +50,16 @@ class AccountDeletionController extends Controller
             return response()->json(['status' => 'stale_timestamp'], 401);
         }
 
-        $expected = hash_hmac('sha256', $timestamp.'.'.$request->getContent(), $secret);
+        $signed = $timestamp.'.'.$request->getContent();
+        $matched = false;
 
-        if (! hash_equals($expected, $signature)) {
+        foreach ($secrets as $secret) {
+            // hash_equals her aday için çağrılır (erken çıkış yok) ki
+            // doğrulama süresi hangi anahtarın tuttuğunu sızdırmasın.
+            $matched = hash_equals(hash_hmac('sha256', $signed, $secret), $signature) || $matched;
+        }
+
+        if (! $matched) {
             return response()->json(['status' => 'unauthorized'], 401);
         }
 

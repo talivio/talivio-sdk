@@ -24,13 +24,35 @@ class TalivioProvider extends AbstractProvider implements ProviderInterface
         return config('talivio.hub_url').'/oauth/token';
     }
 
+    /**
+     * @throws \RuntimeException hub beklenen kimlik gövdesini döndürmezse
+     */
     protected function getUserByToken($token): array
     {
         $response = $this->getHttpClient()->get(config('talivio.hub_url').'/account/api/userinfo', [
-            'headers' => ['Authorization' => 'Bearer '.$token],
+            'headers' => [
+                'Authorization' => 'Bearer '.$token,
+                'Accept' => 'application/json',
+            ],
+            'http_errors' => false,
         ]);
 
-        return json_decode((string) $response->getBody(), true);
+        $payload = json_decode((string) $response->getBody(), true);
+
+        /*
+         * Eskiden durum kodu hiç kontrol edilmiyor, gövde körlemesine
+         * decode ediliyordu. 401 veya bir HTML hata sayfası geldiğinde
+         * `null` dönüyor ve hata, giriş akışının ortasında anlamsız bir
+         * TypeError olarak patlıyordu. Açık bir istisna en azından hangi
+         * adımın başarısız olduğunu söyler.
+         */
+        if ($response->getStatusCode() !== 200 || ! is_array($payload)) {
+            throw new \RuntimeException(
+                'Talivio Accounts kimlik uç noktası beklenmeyen yanıt verdi (HTTP '.$response->getStatusCode().').'
+            );
+        }
+
+        return $payload;
     }
 
     protected function mapUserToObject(array $user): User
