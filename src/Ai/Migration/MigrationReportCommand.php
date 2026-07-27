@@ -95,8 +95,23 @@ final class MigrationReportCommand extends Command
 
         sort($sureler);
 
+        /*
+         * ⚠️ SENTETİK VE GERÇEK AYRI SAYILIR (2.MIG.24).
+         *
+         * `talivio:ai-migration-probe` ölçümü gerçek trafiği beklemeden
+         * biriktirebiliyor — gerekliydi, çünkü altı üründe kayıt kendiliğinden
+         * birikmiyordu. Ama sentetik istemler kenar durumları (uzun bağlam,
+         * bozuk girdi, araç turu) taşımaz. Tek sayıda toplasaydık "20 örnek"
+         * diyen bir rapor aslında tek istemin 20 tekrarı olabilirdi ve göç
+         * kararı sahte bir güvene dayanırdı.
+         */
+        $sentetik = array_filter($karsilastirmalar, static fn (array $s): bool => ($s['sentetik'] ?? false) === true);
+        $gercek = count($karsilastirmalar) - count($sentetik);
+
         $this->table(['Ölçüm', 'Değer'], [
             ['Karşılaştırma sayısı', count($karsilastirmalar)],
+            ['— gerçek trafik', $gercek],
+            ['— sentetik (probe)', count($sentetik)],
             ['Gölge yol HATASI', count($hatalar)],
             ['Birincil boş döndü', count($birincilBos)],
             ['Gölge boş döndü', count($golgeBos)],
@@ -115,6 +130,22 @@ final class MigrationReportCommand extends Command
 
         if (count($karsilastirmalar) < 20) {
             $this->warn('Örnek sayısı düşük (<20): karar için erken.');
+
+            return;
+        }
+
+        /*
+         * ⚠️ SENTETİK ÇOĞUNLUKTA OLAN BİR ÖLÇÜM GÖÇ KARARINI TAŞIMAZ.
+         * Eşik sayısal bir kesinlik iddiası değil; "bu tablo ağırlıkla kendi
+         * ürettiğimiz istemlerden oluşuyor" uyarısıdır.
+         */
+        if ($gercek < count($karsilastirmalar) * 0.5) {
+            $this->warn(sprintf(
+                'Ölçümün çoğu SENTETİK (%d gerçek / %d toplam) — probe istemleri kenar '
+                .'durumları taşımaz. Gerçek trafik birikmeden birincili çevirmeyin.',
+                $gercek,
+                count($karsilastirmalar),
+            ));
 
             return;
         }

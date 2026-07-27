@@ -29,6 +29,24 @@ use Throwable;
  */
 final class ShadowTextClient implements TextClient
 {
+    /**
+     * Ölçüm SENTETİK mi (probe komutu) yoksa GERÇEK trafikten mi geldi?
+     *
+     * ⚠️ Ayrım şart. Ölçüldü (2026-07-27): altı üründe gölge kayıtları
+     * kendiliğinden BİRİKMİYOR — samplio/VoxSim/rivo'da hiç yoktu, çünkü AI
+     * yolları seyrek tetikleniyor (destek bileti, belge analizi, sürüş
+     * asistanı). `talivio:ai-migration-probe` bu boşluğu dolduruyor ama
+     * sentetik satırlar gerçeğin YERİNE geçmez: uzun bağlam, bozuk girdi,
+     * araç turu gibi kenar durumları taşımazlar. Ayrıştırılmazsa "20 örnek
+     * toplandı" diyen bir rapor aslında tek istemin 20 tekrarı olur ve göç
+     * kararı sahte bir güvene dayanır.
+     *
+     * Statik: karşılaştırma `generateText`/`generateJson`'ın derininde yazılıyor
+     * ve o imzalar eski istemcilerle BİREBİR aynı kalmak zorunda (sözleşme),
+     * yani ek parametre geçirilemez.
+     */
+    public static bool $synthetic = false;
+
     public function __construct(
         private readonly TextClient $legacy,
         private readonly TextClient $gateway,
@@ -123,6 +141,7 @@ final class ShadowTextClient implements TextClient
             'tur' => $kind,
             'birincil_yol' => $this->primaryName(),
             'golge_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'sentetik' => self::$synthetic,
             ...$compare($shadow),
         ]);
     }
