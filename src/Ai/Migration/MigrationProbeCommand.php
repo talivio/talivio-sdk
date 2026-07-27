@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Talivio\Sdk\Ai\Migration;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Talivio\Sdk\Ai\Contracts\TextClient;
 
 /**
@@ -35,6 +36,63 @@ final class MigrationProbeCommand extends Command
 
     protected $description = 'Temsilî istemlerle her iki AI yolunu koşturur ve gölge karşılaştırması biriktirir';
 
+    /**
+     * Ürünün kendi koşucusuyla ölçüm.
+     *
+     * ⚠️ Karşılaştırma İÇERİK DEĞİL ŞEKİL üzerinden yapılır (talivio-ai
+     * ADR-19): anahtar kümesi, boşluk ve süre. Ürünlerin AI yolları müşteri
+     * verisi taşıyor; ölçüm uğruna onu log'a yazmak göçü bir sızıntıya
+     * çevirirdi.
+     *
+     * @param  list<array<string, mixed>>  $probes
+     */
+    private function runWithCustomRunner(array $probes, ProbeRunner $runner): int
+    {
+        $sayac = 0;
+
+        foreach ($probes as $probe) {
+            $ad = (string) ($probe['ad'] ?? 'isimsiz');
+            $basladi = microtime(true);
+
+            try {
+                ['legacy' => $legacy, 'gateway' => $gateway] = $runner->run($probe);
+            } catch (\Throwable $e) {
+                /*
+                 * Koşucunun hatası ölçümü durdurmaz ama SESSİZ de kalmaz:
+                 * "ölçüm yok" ile "ölçüm başarısız" ayrı şeylerdir.
+                 */
+                Log::build(['driver' => 'single', 'path' => storage_path('logs/ai-migration.log')])
+                    ->error('ai.golge_hata', ['ad' => $ad, 'mesaj' => mb_substr($e->getMessage(), 0, 200)]);
+
+                $this->components->twoColumnDetail($ad, '<fg=red>koşucu hatası</>');
+
+                continue;
+            }
+
+            Log::build(['driver' => 'single', 'path' => storage_path('logs/ai-migration.log')])
+                ->info('ai.golge_karsilastirma', [
+                    'tur' => is_array($legacy) ? 'json' : 'text',
+                    'birincil_yol' => 'legacy',
+                    'golge_ms' => (int) round((microtime(true) - $basladi) * 1000),
+                    'sentetik' => true,
+                    'birincil_anahtarlar' => is_array($legacy) ? array_keys($legacy) : null,
+                    'golge_anahtarlar' => is_array($gateway) ? array_keys($gateway) : null,
+                    'ayni_anahtarlar' => is_array($legacy) && is_array($gateway)
+                        && array_keys($legacy) === array_keys($gateway),
+                    'birincil_bos' => $legacy === null || $legacy === '' || $legacy === [],
+                    'golge_bos' => $gateway === null || $gateway === '' || $gateway === [],
+                ]);
+
+            $this->components->twoColumnDetail($ad, '<fg=green>yazıldı</>');
+            $sayac++;
+        }
+
+        $this->newLine();
+        $this->components->info("{$sayac} temsilî istem koşturuldu (ürünün kendi koşucusuyla).");
+
+        return self::SUCCESS;
+    }
+
     public function handle(): int
     {
         $probes = (array) config('talivio-ai.migration.probes', []);
@@ -64,11 +122,27 @@ final class MigrationProbeCommand extends Command
             return self::FAILURE;
         }
 
+        /*
+         * 2.MIG.25 — ÜRÜN KENDİ KOŞUCUSUNU VEREBİLİR.
+         *
+         * `ShadowTextClient` yolu `TextClient` sözleşmesini şart koşuyor; VoxSim
+         * (toplu çağrı) ve rivo (akış + araç döngüsü) o sözleşmeye sığmadığı
+         * için ölçüm altyapısının dışında kalmışlardı. Kendi `ProbeRunner`'ını
+         * bildiren ürün artık kapsama giriyor.
+         */
+        $runnerClass = config('talivio-ai.migration.probe_runner');
+
+        if (is_string($runnerClass) && $runnerClass !== '') {
+            return $this->runWithCustomRunner($probes, app($runnerClass));
+        }
+
         $client = app(TextClient::class);
 
         if (! $client instanceof ShadowTextClient) {
             $this->components->error(sprintf(
-                'TextClient gölge istemciye bağlı değil (%s) — karşılaştırma yazılmaz.',
+                'TextClient gölge istemciye bağlı değil (%s) ve `migration.probe_runner` '
+                .'tanımlı değil — karşılaştırma yazılmaz. Kendi istemcisini kullanan '
+                .'ürünler bir ProbeRunner bildirmeli (2.MIG.25).',
                 $client::class,
             ));
 
