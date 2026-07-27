@@ -95,6 +95,19 @@ final class MigrationReportCommand extends Command
 
         sort($sureler);
 
+        // Koşucusu süre ayrıştıran satırlar birincil süreyi de taşıyor;
+        // "geçit ne kadar yavaş" sorusu ancak ikisi yan yana cevaplanır.
+        $birincilSureler = array_values(array_filter(array_map(
+            fn (array $s): ?int => isset($s['birincil_ms']) ? (int) $s['birincil_ms'] : null,
+            $karsilastirmalar,
+        )));
+        sort($birincilSureler);
+
+        $ayrisamayan = count(array_filter(
+            $karsilastirmalar,
+            static fn (array $s): bool => ($s['sure_ayrisik'] ?? true) === false,
+        ));
+
         /*
          * ⚠️ SENTETİK VE GERÇEK AYRI SAYILIR (2.MIG.24).
          *
@@ -119,6 +132,14 @@ final class MigrationReportCommand extends Command
             ['— aynı anahtar kümesi', count($json) === 0 ? '—' : count($ayni).' / '.count($json)],
             ['Gölge medyan (ms)', $sureler === [] ? '—' : $sureler[intdiv(count($sureler), 2)]],
             ['Gölge en yavaş (ms)', $sureler === [] ? '—' : end($sureler)],
+            /*
+             * ⚠️ AYRIŞTIRILAMAYAN SÜRE GÖRÜNÜR OLMALI (2.MIG.27). Süresini
+             * ayrıştırmayan bir koşucunun satırında `golge_ms` İKİ YOLUN
+             * TOPLAMI'dır; bunu belirtmeden ortalamaya katmak, geçidi olduğundan
+             * yavaş gösterip göç kararını bozar.
+             */
+            ['— süresi ayrışmayan satır', $ayrisamayan === 0 ? '—' : $ayrisamayan.' (toplam süre!)'],
+            ['Birincil medyan (ms)', $birincilSureler === [] ? '—' : $birincilSureler[intdiv(count($birincilSureler), 2)]],
         ]);
 
         /*

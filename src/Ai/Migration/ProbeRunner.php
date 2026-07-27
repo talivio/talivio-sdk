@@ -29,8 +29,17 @@ interface ProbeRunner
     /**
      * Temsilî istemi ESKİ ve YENİ yolda çalıştırır.
      *
+     * ⚠️ SÜRELERİ DE DÖNDÜRÜN (`legacy_ms` / `gateway_ms`). Koşucu iki yolu
+     * ardışık çalıştırıyor; SDK dışarıdan yalnız TOPLAM süreyi görebilir ve
+     * o rakam "geçidin gecikmesi" sanılırsa iki kat fazla okunur — göç kararı
+     * doğrudan bu sayıya dayanacağı için yanlış okuma pahalıdır (2.MIG.27,
+     * news'te 36637 ms yazarken geçidin gerçek payı 37919/22992 ayrımıydı).
+     *
+     * İki alan OPSİYONEL: eski koşucular çalışmaya devam eder, SDK o zaman
+     * toplam süreyi yazar ve raporda ayrıştırılamaz olarak işaretler.
+     *
      * @param  array<string, mixed>  $probe  Ürünün config'indeki tanım
-     * @return array{legacy: mixed, gateway: mixed}
+     * @return array{legacy: mixed, gateway: mixed, legacy_ms?: int, gateway_ms?: int}
      */
     public function run(array $probe): array;
 }

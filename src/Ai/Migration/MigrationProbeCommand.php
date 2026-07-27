@@ -55,7 +55,8 @@ final class MigrationProbeCommand extends Command
             $basladi = microtime(true);
 
             try {
-                ['legacy' => $legacy, 'gateway' => $gateway] = $runner->run($probe);
+                $sonuc = $runner->run($probe);
+                ['legacy' => $legacy, 'gateway' => $gateway] = $sonuc;
             } catch (\Throwable $e) {
                 /*
                  * Koşucunun hatası ölçümü durdurmaz ama SESSİZ de kalmaz:
@@ -73,7 +74,17 @@ final class MigrationProbeCommand extends Command
                 ->info('ai.golge_karsilastirma', [
                     'tur' => is_array($legacy) ? 'json' : 'text',
                     'birincil_yol' => 'legacy',
-                    'golge_ms' => (int) round((microtime(true) - $basladi) * 1000),
+                    /*
+                     * ⚠️ Koşucu süreleri verdiyse GEÇİDİNKİ yazılır; vermediyse
+                     * toplam yazılır ve `sure_ayrisik: false` ile işaretlenir.
+                     * İşaretsiz bırakmak, iki yolun toplamını "geçit yavaş"
+                     * diye okutup göç kararını bozardı (2.MIG.27).
+                     */
+                    'golge_ms' => isset($sonuc['gateway_ms'])
+                        ? (int) $sonuc['gateway_ms']
+                        : (int) round((microtime(true) - $basladi) * 1000),
+                    'birincil_ms' => isset($sonuc['legacy_ms']) ? (int) $sonuc['legacy_ms'] : null,
+                    'sure_ayrisik' => isset($sonuc['gateway_ms']),
                     'sentetik' => true,
                     'birincil_anahtarlar' => is_array($legacy) ? array_keys($legacy) : null,
                     'golge_anahtarlar' => is_array($gateway) ? array_keys($gateway) : null,
