@@ -59,6 +59,7 @@ class TalivioServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([HeartbeatCommand::class, MigrationReportCommand::class, MigrationProbeCommand::class]);
             $this->scheduleHeartbeat();
+        $this->scheduleMigrationProbe();
         }
     }
 
@@ -73,6 +74,42 @@ class TalivioServiceProvider extends ServiceProvider
      * Ürün zamanlamayı kendi devralmak isterse config'te `heartbeat_schedule`'ı
      * false yapıp kendi Schedule kaydını yazar.
      */
+    /**
+     * talivio-ai 2.MIG.24/27 — göç ölçümünün DÜZENLİ koşması.
+     *
+     * ⚠️ NEDEN MERKEZDE: heartbeat'te öğrenildiği gibi, her ürüne elle
+     * kopyalanan bir `Schedule` satırı bir üründe unutulur ve o ürün sessizce
+     * ölçüm dışında kalır — göç ölçümünde bu tam olarak yaşandı (samplio,
+     * VoxSim ve rivo'da haftalarca tek satır bile birikmemişti).
+     *
+     * ⚠️ VARSAYILAN KAPALI ve bu bilinçli: probe İKİNCİ BİR FATURA üretir
+     * (her istem iki yolda birden koşar). Açmak, göç ölçümü için para
+     * harcamayı kabul etmektir; göç bitince kapatılmalıdır.
+     *
+     * ⚠️ Ayrıca `migration.shadow` da açık olmalı — komut zaten onu şart
+     * koşuyor. İki bayrağı birleştirmedim: biri "ölçüm yapılsın mı", diğeri
+     * "kendiliğinden mi koşsun" sorusunu cevaplıyor ve bir ürün ölçümü elle
+     * tetiklemeyi tercih edebilir.
+     */
+    private function scheduleMigrationProbe(): void
+    {
+        if (! config('talivio-ai.migration.probe_schedule', false)) {
+            return;
+        }
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            /*
+             * Günde iki kez: 20 örneklik karar eşiğine ~10 günde ulaşır.
+             * Daha sık koşmak ölçümü hızlandırmaz — asıl gecikme sağlayıcı
+             * değişkenliğinin farklı saatlerde görülmesi, çağrı sayısı değil.
+             */
+            $schedule->command('talivio:ai-migration-probe')
+                ->twiceDaily(4, 16)
+                ->withoutOverlapping()
+                ->runInBackground();
+        });
+    }
+
     private function scheduleHeartbeat(): void
     {
         if (! config('talivio.heartbeat_schedule', true)) {
