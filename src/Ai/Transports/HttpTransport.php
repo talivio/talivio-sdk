@@ -29,7 +29,7 @@ final class HttpTransport implements Transport
                 ->connectTimeout($this->connectTimeout)
                 ->withToken((string) $this->key)
                 ->acceptJson()
-                ->post(rtrim($this->baseUrl, '/').'/'.ltrim($path, '/'), $payload);
+                ->post($this->url($path), $payload);
         } catch (ConnectionException) {
             /*
              * Bağlantı hatası bir İSTİSNA olarak yukarı taşınmaz: ADR-17 gereği
@@ -41,5 +41,32 @@ final class HttpTransport implements Transport
         }
 
         return ['status' => $response->status(), 'body' => (array) $response->json()];
+    }
+
+    /**
+     * ⚠️ API SÜRÜM ÖNEKİNİ SDK KOYAR, ÜRÜNÜN `.env`'İ DEĞİL.
+     *
+     * Bu satır bir üretim hatasının onarımı (2026-07-27): `base_url` ürünlerde
+     * doğal olarak `https://ai.talivio.com` yazıyordu, `chat/completions` de
+     * öneksizdi — ikisi birleşince `/v1` hiç oluşmuyor ve ağ geçidi 404
+     * dönüyordu. Hata GÖRÜNMÜYORDU çünkü `TalivioAi` 4xx'i bozulma yoluna
+     * çevirip `null` döndürüyor (ADR-17: ürün AI yüzünden çökmez) ve teşhis
+     * satırı `Log::warning`'e yazıldığı için `LOG_LEVEL=error` olan üretimde
+     * yutuluyordu. Sonuç: altı üründe gölge koşu aylarca "geçit boş dönüyor"
+     * ölçüyordu — oysa geçit hiç çağrılmamıştı.
+     *
+     * Sürüm önekini burada tutmanın sebebi: `base_url` altı ürünün `.env`'inde
+     * ayrı ayrı yazılı ve hepsini aynı anda değiştiremiyoruz. Zaten `/v1` ile
+     * biten bir taban da kabul ediliyor, yoksa `/v1/v1/...` üretirdik.
+     */
+    private function url(string $path): string
+    {
+        $base = rtrim($this->baseUrl, '/');
+
+        if (! str_ends_with($base, '/v1')) {
+            $base .= '/v1';
+        }
+
+        return $base.'/'.ltrim($path, '/');
     }
 }

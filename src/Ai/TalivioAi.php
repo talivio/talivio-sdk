@@ -92,15 +92,10 @@ final class TalivioAi
              * gecikme ekler ve ağ geçidinin oran sınırını besler.
              */
             if ($lastStatus >= 400 && $lastStatus < 500 && $lastStatus !== 429) {
-                Log::warning('talivio-ai.kalici_hata', [
-                    'status' => $lastStatus,
-                    'code' => $response['body']['error']['code'] ?? null,
-                ]);
-
                 // Kalıcı hata devreyi AÇMAZ: sorun geçitte değil bizim
                 // isteğimizde. Devreyi açmak, düzeltilebilir bir hata yüzünden
                 // çalışan geçidi de kapatmak olurdu.
-                return $this->degrade($capability, $payload, 'kalıcı hata: '.$lastStatus);
+                return $this->degrade($capability, $payload, 'kalıcı hata: '.$lastStatus.' '.($response['body']['error']['code'] ?? ''));
             }
 
             $this->breaker->recordFailure();
@@ -157,6 +152,18 @@ final class TalivioAi
     /** @param array<string, mixed> $payload */
     private function degrade(string $capability, array $payload, string $reason): AiResult
     {
+        /*
+         * ⚠️ BOZULMA HER ZAMAN `error` SEVİYESİNDE YAZILIR.
+         *
+         * Önceden yalnızca 4xx `Log::warning` ile yazılıyordu, erişilemezlik ve
+         * kısa devre ise hiç yazılmıyordu. Üretimde `LOG_LEVEL=error` olduğu
+         * için warning de yutuluyordu: sonuç, ağ geçidinin hiç çağrılamadığı
+         * bir 404 arızasının altı üründe aylarca sessiz kalması oldu
+         * (2026-07-27 onarımı). ADR-17 ürünün ÇÖKMEMESİNİ ister; SESSİZ
+         * kalmasını değil — bozulma ürün için güvenli, operasyon için acildir.
+         */
+        Log::error('talivio-ai.bozulma', ['yetenek' => $capability, 'sebep' => $reason]);
+
         $fallback = $this->degradation->fallback($capability, $payload);
 
         if ($fallback !== null && isset($fallback['content'])) {
