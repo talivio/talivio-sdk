@@ -189,4 +189,40 @@
                 drop-shadow(0 6px 18px rgb(48 181 248 / 0.18));
         }
     }
+
+    /*
+     * ───────── Zemin ızgarası ─────────
+     *
+     * Hero gibi geniş boş alanların DÜZ bir renk olmaktan çıkması için ince bir
+     * ızgara. Üstündeki blok (`lift` + `cut`) böylece bir yüzeyin üzerinde
+     * duruyormuş gibi okunuyor; desensiz zeminde blok ile arka plan aynı
+     * boşlukta yüzüyor.
+     *
+     * ⚠️ Pakete TAŞINDI çünkü üç ürün (a11yproof, privascan, TCSR) bunu zaten
+     * `bg-grid-light`/`bg-grid-dark` adıyla ÇAĞIRIYORDU ama hiçbiri
+     * TANIMLAMAMIŞTI — ızgara üç üründe de hiç çizilmedi. Dördüncüsü (FinAI)
+     * kendi kopyasını yazmıştı. Aynı deseni dört yere yazmak yerine kaynağı
+     * burası.
+     *
+     * ⚠️ Koyu temada gri çizgi kaybolur, açık temada beyaz çizgi kaybolur:
+     * iki tema iki ayrı renk ister, tek bir yarı saydam değer ikisinde birden
+     * çalışmaz.
+     *
+     * Kullanım — maskesiz ızgara sayfayı bir deftere çevirir, kenarlara doğru
+     * söndürün:
+     *   <div class="absolute inset-0 -z-10 bg-grid
+     *               [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]"></div>
+     */
+    .bg-grid {
+        background-image:
+            linear-gradient(to right, rgb(100 116 139 / 0.10) 1px, transparent 1px),
+            linear-gradient(to bottom, rgb(100 116 139 / 0.10) 1px, transparent 1px);
+        background-size: 38px 38px;
+    }
+
+    :where([data-theme='dark'], .dark) .bg-grid {
+        background-image:
+            linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    }
 }
