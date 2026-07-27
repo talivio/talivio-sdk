@@ -86,12 +86,35 @@ final class GatewayTextClient implements TextClient
     private function options(array $opts): array
     {
         return array_filter([
-            'tier' => $this->tier(),
+            'tier' => $opts['tier'] ?? $this->tier(),
             'temperature' => $opts['temperature'] ?? null,
             'max_tokens' => $opts['max_tokens'] ?? null,
+            /*
+             * talivio-ai ADR-34 — düşünme bütçesi.
+             *
+             * ⚠️ BU SATIR OLMADAN AĞ GEÇİDİNDEKİ ÖZELLİK İSTEMCİDEN
+             * ERİŞİLEMİYORDU. Ölçüldü (2026-07-27, vatlio üretim):
+             *   eski yol (gemini-2.5-flash) 2831 ms
+             *   geçit `cheap`     (gemma, 0 düşünme)        4614 ms
+             *   geçit `standard`  (deepseek-pro, 461 düşünme) 9775 ms
+             * Yani gecikmenin ana kaynağı düşünme token'ları ve varsayılan
+             * tier `standard` olduğu için ürünler en yavaş yolu alıyordu.
+             *
+             * ⚠️ `max_tokens` bunu SINIRLAMAZ: tavan yalnız görünür çıktıyı
+             * keser, düşünme token'ları dışarıda kalır (hem faturaya hem
+             * SÜREYE girer). Bu yüzden ayrı bir kola ihtiyaç vardı.
+             */
+            'reasoning_effort' => $opts['reasoning_effort'] ?? config('talivio-ai.reasoning_effort'),
         ], fn ($v): bool => $v !== null);
     }
 
+    /**
+     * Varsayılan kalite katmanı.
+     *
+     * ⚠️ Çağıran `opts['tier']` ile ezebilir: aynı üründe destek asistanı
+     * (gecikmeye duyarlı) ile gece çalışan bir toplu iş aynı bandı istemek
+     * zorunda değil.
+     */
     private function tier(): string
     {
         return (string) config('talivio-ai.default_tier', 'standard');
