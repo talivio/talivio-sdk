@@ -12,7 +12,7 @@ declare(strict_types=1);
  */
 return [
 
-    'base_url' => env('TALIVIO_AI_URL', 'https://ai.talivio.com'),
+    'base_url' => env('TALIVIO_AI_BASE_URL', 'https://ai.talivio.com'),
     'key' => env('TALIVIO_AI_KEY'),
 
     /*
