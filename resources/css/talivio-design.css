@@ -76,6 +76,31 @@
     .cut-lg { --cut: 22px; }  /* sayfanın ana kutusu (form kartı, yazma alanı) */
 
     /*
+     * ───────── Kesik bloklarda ODAK HALKASI ─────────
+     *
+     * ⚠️ TUZAK 1'in kardeşi: kırpılan elemanda DIŞ odak halkası (`outline`,
+     * `ring`) kırpma sınırının dışında kalır ve HİÇ GÖRÜNMEZ — klavyeyle gezen
+     * kullanıcı nerede olduğunu kaybeder. Halka bu yüzden İÇE (`inset`)
+     * veriliyor; `.field:focus` ile birebir aynı mantık.
+     *
+     * ⚠️ Yedek renk BİLEREK var: ürün kendi `--color-brand-500`'ünü
+     * tanımlamamışsa `var()` çözülmez, TÜM `box-shadow` bildirimi geçersiz olur
+     * ve halka büsbütün kaybolur — sessiz bir erişilebilirlik gerilemesi.
+     *
+     * ⚠️ Bu kural pakete ÜRÜNLERDEN GERİ TAŞINDI (2026-07-27): yedi üründe
+     * birbirinden bağımsız yazılmıştı ve şimdiden sapmıştı — kimi
+     * `--color-brand-500`, shop ise `--color-talivio-500` kullanıyordu, kimi
+     * yedekliydi kimi değil. Kopyalar önce paket bunu yaymadan SDK'ya
+     * çevrilseydi yedi üründe birden odak halkası sessizce kaybolacaktı.
+     */
+    .cut:focus-visible,
+    .cut-sm:focus-visible,
+    .cut-lg:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px var(--color-brand-500, oklch(60.5% 0.17 247));
+    }
+
+    /*
      * ───────── Gölge (ÜÇ katman) ─────────
      *
      * ⚠️ TUZAK 1: bu sınıf KIRPILAN elemana değil, onu SARAN elemana verilir.
