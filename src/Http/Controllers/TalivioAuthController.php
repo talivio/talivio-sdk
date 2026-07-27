@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
+use RuntimeException;
 
 /**
  * "Talivio Accounts ile devam et" — redirects to talivio.com/oauth/authorize
@@ -18,9 +19,31 @@ class TalivioAuthController extends Controller
 {
     public function redirect()
     {
+        $this->guardConfigured();
+
         return Socialite::driver('talivio')
             ->redirectUrl(config('talivio.redirect') ?: url('/talivio/callback'))
             ->redirect();
+    }
+
+    /**
+     * `client_id`/`client_secret` boş bırakılırsa (Filament'te ürün kaydedilip
+     * .env'e kopyalanmadıysa) Socialite bunu sessizce atlar: `client_id`
+     * parametresi olmadan bir authorize URL'i üretir, hub tarafı da bunu
+     * `invalid_client` ile reddeder. Kullanıcı tıklar, çirkin bir JSON/hata
+     * sayfası görür ya da hiçbir şey olmamış gibi hisseder — hiçbir yerde
+     * loglanmaz. Burada erken patlatmak, ürünün kendi hata telemetrisi
+     * (ErrorReporter, ServiceProvider'da exception handler'a bağlı) üzerinden
+     * talivio.com'un "Talivio Ops" panosuna otomatik düşmesini sağlıyor.
+     */
+    private function guardConfigured(): void
+    {
+        if (! config('talivio.client_id') || ! config('talivio.client_secret')) {
+            throw new RuntimeException(
+                'Talivio Accounts yapılandırılmamış: TALIVIO_CLIENT_ID / TALIVIO_CLIENT_SECRET .env\'de eksik. '
+                .'Değerler "Talivio Ürünleri" (talivio.com/admin) altında bu ürünün kaydından alınır.'
+            );
+        }
     }
 
     /**
@@ -30,6 +53,8 @@ class TalivioAuthController extends Controller
      */
     public function link(Request $request)
     {
+        $this->guardConfigured();
+
         $request->session()->put('talivio.linking', true);
 
         return Socialite::driver('talivio')
