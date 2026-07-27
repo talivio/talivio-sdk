@@ -1,0 +1,253 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TALIVIO GÖRSEL DİLİ — TEK KAYNAK
+ *
+ * Kesik köşeli bloklar, çerçeve yerine gölge, dalgalanan mavi ışık.
+ * Sözleşme: talivio-ai/docs/tasarim-dili.md · İlk uygulama: ai.talivio.com.
+ *
+ * NEDEN SDK'NIN İÇİNDE: paket zaten HER Talivio üründe kurulu ve `talivio::`
+ * ad alanında Blade bileşeni yayınlıyor. Aynı gerekçe iki kez kayda geçti
+ * (ADR-30, ADR-33): kopyalanan katmanlar birbirinden sapıyor — vendio ile
+ * canopyproof'un GeminiClient'ları %95 aynıydı ama farklı varsayılanlara
+ * kaymıştı. 20 projeye CSS kopyalasaydık aynı sapma bu kez görsel dilde,
+ * yani müşterinin GÖRDÜĞÜ yerde tekrarlanırdı.
+ *
+ * ── Kurulum (ürünün `resources/css/app.css` dosyası) ──────────────────────
+ *   1) `@import 'tailwindcss';` SATIRINDAN SONRA bu dosyayı içe aktarın:
+ *        @import '../../vendor/talivio/sdk/resources/css/talivio-design.css';
+ *      (sonra, çünkü aşağıdaki `@apply` kuralları Tailwind'in kendi
+ *      yardımcılarına ve `dark:` varyantına dayanıyor)
+ *   2) SDK'nın Blade dosyalarını `@source` ile TARATIN — README'deki
+ *      "Tasarım dili" bölümündeki satırı birebir kopyalayın. Taranmayan paket
+ *      sınıfları CSS'e hiç girmiyor; canlıda beyaz üstüne beyaz buton olarak
+ *      görüldü (2026-07-26).
+ *
+ * ── Tailwind v3 kullanan ürünlerde ────────────────────────────────────────
+ *   `@layer components` ve `@apply` aynı çalışır. Tek fark koyu tema
+ *   seçicisi: v3'te `tailwind.config.js` içine
+ *       darkMode: ['class', '[data-theme="dark"]']
+ *   yazın. Aşağıdaki `:where([data-theme='dark'], .dark)` seçicileri düz CSS
+ *   olduğu için her iki dünyada da (öznitelik ya da `.dark` sınıfı) çalışır;
+ *   `@apply`'ın içindeki `dark:` varyantı ise ürünün kendi yapılandırmasına
+ *   bakar — o yüzden yukarıdaki satır gerekli.
+ *
+ * ── Kullanım kalıbı ───────────────────────────────────────────────────────
+ *   Gölge DIŞTA, kırpma İÇTE:
+ *       <div class="lift"><div class="cut bg-white p-6 dark:bg-neutral-900">…
+ *   Öne çıkan blok:
+ *       <div class="glow"><div class="cut-lg bg-white p-6 dark:bg-neutral-900">…
+ *
+ * ── ⚠️ DÖRT TUZAK (hepsi ai.talivio.com'da yaşandı) ───────────────────────
+ *   1. GÖLGE KIRPILAN ELEMANA VERİLEMEZ. `clip-path` elemanın kendi
+ *      `box-shadow`'unu da `drop-shadow`'unu da keser, gölge hiç görünmez.
+ *      Gölge HER ZAMAN sarmalayıcıda durur: `.lift`/`.glow` dışta, `.cut` içte.
+ *   2. KIRPILAN KUTU İÇİNDEKİ AÇILIR MENÜYÜ DE KESER. Kırpılmış bir kartın
+ *      içine açılır menü/panel konulamaz — panel görünmez. Menü, kırpılmayan
+ *      bir sarmalayıcının çocuğu olmalı (ya da satır içi düğmelere geçin).
+ *   3. KOYU TEMADA SAF GÖLGE GÖRÜNMEZ (siyah üstüne siyah). İlk katman ince
+ *      bir açık kenar ışığına döner — aşağıdaki koyu tema blokları.
+ *   4. `box-shadow` DEĞİL `filter: drop-shadow`. Kutu gölgesi kırpma sınırında
+ *      biter; ışığın köşelerden taşması yalnızca `drop-shadow` ile olur.
+ *
+ *   (Beşinci, tasarım dışı ama aynı anda yaşandı: gövdesine `h-full`
+ *   yazan bir kabukta alt bilginin son ~30 pikseli kaydırılamıyor. Belge
+ *   sayfaları `min-h-full`, yalnızca kendi içinde kaydıran uygulama ekranları
+ *   `h-full`. `<x-talivio::footer>` kullanan sayfalarda buna dikkat edin.)
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+@layer components {
+    /* ───────── Kesik köşe: üst-sol ve alt-sağ kesilir, diğer ikisi keskin ───────── */
+    .cut,
+    .cut-sm,
+    .cut-lg {
+        clip-path: polygon(
+            var(--cut) 0,
+            100% 0,
+            100% calc(100% - var(--cut)),
+            calc(100% - var(--cut)) 100%,
+            0 100%,
+            0 var(--cut)
+        );
+    }
+
+    .cut-sm { --cut: 8px; }   /* buton, çip, satır, giriş alanı */
+    .cut    { --cut: 14px; }  /* kart, açılır menü, uyarı kutusu */
+    .cut-lg { --cut: 22px; }  /* sayfanın ana kutusu (form kartı, yazma alanı) */
+
+    /*
+     * ───────── Gölge (ÜÇ katman) ─────────
+     *
+     * ⚠️ TUZAK 1: bu sınıf KIRPILAN elemana değil, onu SARAN elemana verilir.
+     * ⚠️ TUZAK 4: `box-shadow` değil `drop-shadow` — kutu gölgesi kırpma
+     *    sınırında biter, ışık köşelerden taşmaz.
+     *
+     * Üç katman: yakın kenar + orta + geniş yayılma. Tek katmanlı gölge ya sert
+     * ya bulanık kalıyor, blok zeminden "kalkmış" görünmüyor.
+     */
+    .lift {
+        filter:
+            drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+            drop-shadow(0 4px 6px rgb(15 23 42 / 0.07))
+            drop-shadow(0 16px 24px rgb(15 23 42 / 0.10));
+    }
+
+    .lift-sm {
+        filter:
+            drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+            drop-shadow(0 2px 4px rgb(15 23 42 / 0.06));
+    }
+
+    /*
+     * ⚠️ TUZAK 3: koyu temada saf gölge GÖRÜNMEZ — siyah üstüne siyah. İlk
+     * katman ince bir AÇIK kenar ışığına dönüyor; çerçeve çizmeden kenarı
+     * okunur kılan tek yol.
+     *
+     * Seçici düz CSS ve iki dünyayı da kapsıyor: `data-theme` özniteliği
+     * (ai.talivio.com) ve `.dark` sınıfı (Tailwind'in class stratejisi).
+     * `:where()` sıfır özgüllükte olduğu için ürünün kendi kuralları bu
+     * kuralları ezmekte zorlanmaz.
+     */
+    :where([data-theme='dark'], .dark) .lift {
+        filter:
+            drop-shadow(0 0 0.5px rgb(147 200 238 / 0.35))
+            drop-shadow(0 4px 8px rgb(0 0 0 / 0.5))
+            drop-shadow(0 20px 32px rgb(0 0 0 / 0.55));
+    }
+
+    :where([data-theme='dark'], .dark) .lift-sm {
+        filter:
+            drop-shadow(0 0 0.5px rgb(147 200 238 / 0.28))
+            drop-shadow(0 2px 6px rgb(0 0 0 / 0.45));
+    }
+
+    /*
+     * ───────── Dalgalanan mavi ışık ─────────
+     *
+     * Blokların arkasındaki ışık sabit değil: yön ve yoğunluğu 11 saniyelik
+     * döngüde değişiyor. İstenenden belirgin biçimde ŞEFFAF: 0.6 opaklıkta bir
+     * ışık arayüzde ışık değil ürün oluyor ve metnin kontrastını düşürüyor.
+     */
+    @keyframes glow-drift {
+        0%, 100% {
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.14))
+                drop-shadow(0 18px 38px rgb(48 181 248 / 0.10));
+        }
+        33% {
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(-8px 10px 24px rgb(48 181 248 / 0.20))
+                drop-shadow(12px 24px 46px rgb(48 181 248 / 0.11));
+        }
+        66% {
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(9px 7px 20px rgb(48 181 248 / 0.15))
+                drop-shadow(-10px 22px 42px rgb(48 181 248 / 0.15));
+        }
+    }
+
+    @keyframes glow-drift-dark {
+        0%, 100% {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.18))
+                drop-shadow(0 20px 40px rgb(0 0 0 / 0.45));
+        }
+        33% {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(-9px 10px 26px rgb(48 181 248 / 0.26))
+                drop-shadow(12px 24px 46px rgb(0 0 0 / 0.45));
+        }
+        66% {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(10px 8px 22px rgb(48 181 248 / 0.20))
+                drop-shadow(-10px 22px 44px rgb(0 0 0 / 0.5));
+        }
+    }
+
+    .glow { animation: glow-drift 11s ease-in-out infinite; }
+
+    :where([data-theme='dark'], .dark) .glow { animation-name: glow-drift-dark; }
+
+    /* Yan yana duran kartlar aynı anda nefes almasın: hepsi eşzamanlı olursa
+       efekt "animasyon" gibi değil "yanıp sönme" gibi okunuyor. */
+    .glow:nth-child(2) { animation-delay: -3.7s; }
+    .glow:nth-child(3) { animation-delay: -7.4s; }
+
+    /* Yazma alanına girildiğinde ışık hızlanır: kırpılan kutuda odak halkası
+       görünmediği için (bkz. `.field:focus`) geri bildirim buradan geliyor. */
+    .glow:focus-within { animation-duration: 4s; }
+
+    /* Hareketten rahatsız olan kullanıcıya animasyon HİÇ çalışmaz; sabit bir
+       ışık kalır, blok yine de zeminden ayrılır. */
+    @media (prefers-reduced-motion: reduce) {
+        .glow {
+            animation: none;
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.14));
+        }
+
+        :where([data-theme='dark'], .dark) .glow {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.18));
+        }
+    }
+
+    /*
+     * ───────── Form alanı ve birincil buton ─────────
+     *
+     * Aynı sınıf dizisi beş kimlik ekranında kopyalanmıştı; biri değişip
+     * diğerleri değişmediğinde ekranlar birbirinden sapıyordu (odak halkası
+     * yalnızca iki formda vardı).
+     *
+     * ⚠️ Alan ÇERÇEVESİZ: zeminden tonuyla ayrılıyor (kural 2).
+     */
+    .field {
+        --cut: 8px;
+        @apply w-full bg-neutral-100 px-3.5 py-2.5 text-sm transition outline-none
+               placeholder:text-neutral-400 dark:bg-white/5 dark:placeholder:text-neutral-600;
+
+        clip-path: polygon(
+            var(--cut) 0,
+            100% 0,
+            100% calc(100% - var(--cut)),
+            calc(100% - var(--cut)) 100%,
+            0 100%,
+            0 var(--cut)
+        );
+    }
+
+    /*
+     * Odak halkası DIŞA değil İÇE (`inset`): dış halka kırpma sınırının
+     * dışında kalır ve hiç görünmez (tuzak 1'in kardeşi).
+     *
+     * Yedek renk BİLEREK var: ürün kendi `--color-brand-500`'ünü tanımlamamışsa
+     * `var()` çözümlenemez, TÜM `box-shadow` bildirimi geçersiz olur ve odak
+     * halkası büsbütün kaybolur — erişilebilirlik gerilemesi. Yedek, Talivio
+     * mavisinin kendisi.
+     */
+    .field:focus { box-shadow: inset 0 0 0 2px var(--color-brand-500, oklch(60.5% 0.17 247)); }
+
+    .btn-primary {
+        --cut: 8px;
+        @apply inline-flex w-full items-center justify-center gap-2 bg-neutral-900 px-4 py-2.5
+               text-sm font-semibold text-white transition hover:bg-neutral-700
+               dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200;
+
+        clip-path: polygon(
+            var(--cut) 0,
+            100% 0,
+            100% calc(100% - var(--cut)),
+            calc(100% - var(--cut)) 100%,
+            0 100%,
+            0 var(--cut)
+        );
+    }
+}

@@ -52,6 +52,7 @@ class TalivioServiceProvider extends ServiceProvider
         $this->registerRoutes();
         $this->registerErrorReporting();
         $this->registerViews();
+        $this->registerTranslations();
         $this->registerMailTheme();
         $this->registerPublishing();
 
@@ -223,6 +224,18 @@ class TalivioServiceProvider extends ServiceProvider
     }
 
     /**
+     * `<x-talivio::footer />` metinleri (`talivio::footer.*`).
+     *
+     * Bileşenin içine sabit metin yazılmadı: alt bilgi 20 küsur üründe basılıyor
+     * ve hepsi Türkçe değil — İngilizce arayüzlü bir ürünün alt bilgisi Türkçe
+     * çıkardı. Ürün metni değiştirmek isterse `talivio-lang` etiketiyle yayınlar.
+     */
+    private function registerTranslations(): void
+    {
+        $this->loadTranslationsFrom(__DIR__.'/../lang', 'talivio');
+    }
+
+    /**
      * Brands every Markdown mailable/notification (password resets, email
      * verification, receipts, …) across all Talivio products with a shared
      * look: the SDK's mail-theme dir is appended to Laravel's markdown mail
@@ -263,5 +276,17 @@ class TalivioServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../config/talivio-ai.php' => config_path('talivio-ai.php'),
         ], 'talivio-ai-config');
+
+        /*
+         * Alt bilgi metinleri — YALNIZCA metni değiştirmek isteyen ürün yayınlar.
+         *
+         * ⚠️ Görsel dilin CSS'i (resources/css/talivio-design.css) BİLEREK
+         * yayınlanmıyor: kopyalanan dosya güncellenmez ve sapar — bu paketin
+         * var oluş sebebinin tam tersi. Ürün onu vendor yolundan `@import`
+         * eder (README "Tasarım dili").
+         */
+        $this->publishes([
+            __DIR__.'/../lang' => lang_path('vendor/talivio'),
+        ], 'talivio-lang');
     }
 }
