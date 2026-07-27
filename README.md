@@ -6,16 +6,24 @@ Talivio Accounts SSO + central error/support telemetry for every Talivio product
 
 1. **Register the product in talivio.com** — `/admin/applications` → create → fill name + URL. This provisions an OAuth client and an ingest token, shown once.
 
-2. **Add the package** (path repository until this is on a private Packagist):
+2. **Add the package** — pin the exact GitHub URL as a VCS repository:
 
 ```json
 "repositories": [
-    { "type": "path", "url": "../talivio-sdk" }
+    { "type": "vcs", "url": "https://github.com/talivio/talivio-sdk.git" }
 ],
 "require": {
-    "talivio/sdk": "*"
+    "talivio/sdk": "^1.17"
 }
 ```
+
+⚠️ **The `repositories` block above is not optional — it is the dependency-confusion
+guard.** `talivio/sdk` is **not published on Packagist**. Composer resolves package
+names from every repository it knows about, including Packagist, unless a name match
+in an earlier entry wins first. Without the VCS pin, a future Packagist account
+claiming the name `talivio/sdk` would be installed silently instead of this package —
+`composer install` gives no warning either way. Every product in this org already
+pins this repository entry; do not `composer require talivio/sdk` without it first.
 
 ```bash
 composer require talivio/sdk
@@ -49,7 +57,7 @@ Schedule::command('talivio:heartbeat')->everyFiveMinutes();
 
 That's it — login button, error logs, and support tickets all show up in talivio.com's "Talivio Accounts" / "Talivio Ops" admin panels.
 
-## Design language (from v1.12.0)
+## Design language (from v1.12.0, split into primitives + components in v1.17.0)
 
 The Talivio visual language — cut corners instead of rounded ones, shadow
 instead of borders, a slowly drifting blue glow, and the standard footer —
@@ -65,10 +73,23 @@ In the product's `resources/css/app.css`, **after** `@import 'tailwindcss';`:
 @import '../../vendor/talivio/sdk/resources/css/talivio-design.css';
 ```
 
-That gives you `cut` / `cut-sm` / `cut-lg`, `lift` / `lift-sm`, `glow`, `field`
-and `btn-primary`, with dark-theme counterparts. Usage pattern — **shadow on the
-outside, clipping on the inside** (the shadow of a clipped element is clipped
-away too):
+That gives you `cut` / `cut-sm` / `cut-lg` (+ focus ring), `lift` / `lift-sm`,
+`glow`, `field` and `btn-primary`, with dark-theme counterparts.
+
+⚠️ **If the product already has its own button/form system** (its own
+`.btn-primary`, `.input`, etc.), import `talivio-primitives.css` instead — it
+has everything above **except** `field` and `btn-primary`:
+
+```css
+@import '../../vendor/talivio/sdk/resources/css/talivio-primitives.css';
+```
+
+This split exists because `talivio-design.css`'s `.btn-primary` is `w-full`;
+a product with its own narrower inline button silently had every primary
+button stretch to full width when the two collided (measured in vatlio).
+
+Usage pattern — **shadow on the outside, clipping on the inside** (the shadow
+of a clipped element is clipped away too):
 
 ```html
 <div class="lift"><div class="cut bg-white p-6 dark:bg-neutral-900">…</div></div>
