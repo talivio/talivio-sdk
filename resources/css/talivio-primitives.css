@@ -1,0 +1,192 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TALIVIO GÖRSEL DİLİ — İLKELER (kesik köşe, gölge, dalgalanan ışık, odak)
+ *
+ * Sözleşme: talivio-ai/docs/tasarim-dili.md
+ *
+ * ── NE ZAMAN BU DOSYA, NE ZAMAN `talivio-design.css` ──────────────────────
+ *
+ *   • Ürünün KENDİ buton/form sistemi YOKSA → `talivio-design.css` alın.
+ *     O dosya bunu içeriyor, üstüne `field` ve `btn-primary`'yi de veriyor.
+ *
+ *   • Ürünün kendi `.btn`/`.input` ailesi VARSA → BU dosyayı alın.
+ *     Yalnızca ilkeler gelir, buton/form kararlarınıza karışılmaz.
+ *
+ * ⚠️ AYRIM NEDEN VAR (2026-07-27, vatlio'da ölçüldü): paket tek parçayken
+ * vatlio'nun kendi `.btn-primary`'si SDK'nınkiyle çakışıyordu. vatlio'nunki
+ * satır içi ve dar, SDK'nınki `w-full`. vatlio genişliği hiç belirtmediği için
+ * paketin `w-full`'ü sızıyor ve ürünün ÜÇ birincil butonu tam genişliğe
+ * yayılıyordu — "yinelemeyi temizledik" diye yapılan taşıma, görünür bir
+ * bozulma üretecekti. İlkeler paylaşılır; buton/form görüşlü kararlardır.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+@layer components {
+    /* ───────── Kesik köşe: üst-sol ve alt-sağ kesilir, diğer ikisi keskin ───────── */
+    .cut,
+    .cut-sm,
+    .cut-lg {
+        clip-path: polygon(
+            var(--cut) 0,
+            100% 0,
+            100% calc(100% - var(--cut)),
+            calc(100% - var(--cut)) 100%,
+            0 100%,
+            0 var(--cut)
+        );
+    }
+
+    .cut-sm { --cut: 8px; }   /* buton, çip, satır, giriş alanı */
+    .cut    { --cut: 14px; }  /* kart, açılır menü, uyarı kutusu */
+    .cut-lg { --cut: 22px; }  /* sayfanın ana kutusu (form kartı, yazma alanı) */
+
+    /*
+     * ───────── Kesik bloklarda ODAK HALKASI ─────────
+     *
+     * ⚠️ TUZAK 1'in kardeşi: kırpılan elemanda DIŞ odak halkası (`outline`,
+     * `ring`) kırpma sınırının dışında kalır ve HİÇ GÖRÜNMEZ — klavyeyle gezen
+     * kullanıcı nerede olduğunu kaybeder. Halka bu yüzden İÇE (`inset`)
+     * veriliyor; `.field:focus` ile birebir aynı mantık.
+     *
+     * ⚠️ Yedek renk BİLEREK var: ürün kendi `--color-brand-500`'ünü
+     * tanımlamamışsa `var()` çözülmez, TÜM `box-shadow` bildirimi geçersiz olur
+     * ve halka büsbütün kaybolur — sessiz bir erişilebilirlik gerilemesi.
+     *
+     * ⚠️ Bu kural pakete ÜRÜNLERDEN GERİ TAŞINDI (2026-07-27): yedi üründe
+     * birbirinden bağımsız yazılmıştı ve şimdiden sapmıştı — kimi
+     * `--color-brand-500`, shop ise `--color-talivio-500` kullanıyordu, kimi
+     * yedekliydi kimi değil. Kopyalar önce paket bunu yaymadan SDK'ya
+     * çevrilseydi yedi üründe birden odak halkası sessizce kaybolacaktı.
+     */
+    .cut:focus-visible,
+    .cut-sm:focus-visible,
+    .cut-lg:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px var(--color-brand-500, oklch(60.5% 0.17 247));
+    }
+
+    /*
+     * ───────── Gölge (ÜÇ katman) ─────────
+     *
+     * ⚠️ TUZAK 1: bu sınıf KIRPILAN elemana değil, onu SARAN elemana verilir.
+     * ⚠️ TUZAK 4: `box-shadow` değil `drop-shadow` — kutu gölgesi kırpma
+     *    sınırında biter, ışık köşelerden taşmaz.
+     *
+     * Üç katman: yakın kenar + orta + geniş yayılma. Tek katmanlı gölge ya sert
+     * ya bulanık kalıyor, blok zeminden "kalkmış" görünmüyor.
+     */
+    .lift {
+        filter:
+            drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+            drop-shadow(0 4px 6px rgb(15 23 42 / 0.07))
+            drop-shadow(0 16px 24px rgb(15 23 42 / 0.10));
+    }
+
+    .lift-sm {
+        filter:
+            drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+            drop-shadow(0 2px 4px rgb(15 23 42 / 0.06));
+    }
+
+    /*
+     * ⚠️ TUZAK 3: koyu temada saf gölge GÖRÜNMEZ — siyah üstüne siyah. İlk
+     * katman ince bir AÇIK kenar ışığına dönüyor; çerçeve çizmeden kenarı
+     * okunur kılan tek yol.
+     *
+     * Seçici düz CSS ve iki dünyayı da kapsıyor: `data-theme` özniteliği
+     * (ai.talivio.com) ve `.dark` sınıfı (Tailwind'in class stratejisi).
+     * `:where()` sıfır özgüllükte olduğu için ürünün kendi kuralları bu
+     * kuralları ezmekte zorlanmaz.
+     */
+    :where([data-theme='dark'], .dark) .lift {
+        filter:
+            drop-shadow(0 0 0.5px rgb(147 200 238 / 0.35))
+            drop-shadow(0 4px 8px rgb(0 0 0 / 0.5))
+            drop-shadow(0 20px 32px rgb(0 0 0 / 0.55));
+    }
+
+    :where([data-theme='dark'], .dark) .lift-sm {
+        filter:
+            drop-shadow(0 0 0.5px rgb(147 200 238 / 0.28))
+            drop-shadow(0 2px 6px rgb(0 0 0 / 0.45));
+    }
+
+    /*
+     * ───────── Dalgalanan mavi ışık ─────────
+     *
+     * Blokların arkasındaki ışık sabit değil: yön ve yoğunluğu 11 saniyelik
+     * döngüde değişiyor. İstenenden belirgin biçimde ŞEFFAF: 0.6 opaklıkta bir
+     * ışık arayüzde ışık değil ürün oluyor ve metnin kontrastını düşürüyor.
+     */
+    @keyframes glow-drift {
+        0%, 100% {
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.14))
+                drop-shadow(0 18px 38px rgb(48 181 248 / 0.10));
+        }
+        33% {
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(-8px 10px 24px rgb(48 181 248 / 0.20))
+                drop-shadow(12px 24px 46px rgb(48 181 248 / 0.11));
+        }
+        66% {
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(9px 7px 20px rgb(48 181 248 / 0.15))
+                drop-shadow(-10px 22px 42px rgb(48 181 248 / 0.15));
+        }
+    }
+
+    @keyframes glow-drift-dark {
+        0%, 100% {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.18))
+                drop-shadow(0 20px 40px rgb(0 0 0 / 0.45));
+        }
+        33% {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(-9px 10px 26px rgb(48 181 248 / 0.26))
+                drop-shadow(12px 24px 46px rgb(0 0 0 / 0.45));
+        }
+        66% {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(10px 8px 22px rgb(48 181 248 / 0.20))
+                drop-shadow(-10px 22px 44px rgb(0 0 0 / 0.5));
+        }
+    }
+
+    .glow { animation: glow-drift 11s ease-in-out infinite; }
+
+    :where([data-theme='dark'], .dark) .glow { animation-name: glow-drift-dark; }
+
+    /* Yan yana duran kartlar aynı anda nefes almasın: hepsi eşzamanlı olursa
+       efekt "animasyon" gibi değil "yanıp sönme" gibi okunuyor. */
+    .glow:nth-child(2) { animation-delay: -3.7s; }
+    .glow:nth-child(3) { animation-delay: -7.4s; }
+
+    /* Yazma alanına girildiğinde ışık hızlanır: kırpılan kutuda odak halkası
+       görünmediği için (bkz. `.field:focus`) geri bildirim buradan geliyor. */
+    .glow:focus-within { animation-duration: 4s; }
+
+    /* Hareketten rahatsız olan kullanıcıya animasyon HİÇ çalışmaz; sabit bir
+       ışık kalır, blok yine de zeminden ayrılır. */
+    @media (prefers-reduced-motion: reduce) {
+        .glow {
+            animation: none;
+            filter:
+                drop-shadow(0 1px 1px rgb(15 23 42 / 0.05))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.14));
+        }
+
+        :where([data-theme='dark'], .dark) .glow {
+            filter:
+                drop-shadow(0 0 0.5px rgb(147 200 238 / 0.30))
+                drop-shadow(0 6px 18px rgb(48 181 248 / 0.18));
+        }
+    }
+}
