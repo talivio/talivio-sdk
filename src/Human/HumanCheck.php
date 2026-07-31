@@ -116,11 +116,41 @@ class HumanCheck
             return HumanVerdict::fail(['low_score'], $score);
         }
 
-        if (! $this->consumeOnce($data['tok'], $age)) {
-            return HumanVerdict::fail(['replayed'], $score);
+        return HumanVerdict::pass($score);
+    }
+
+    /**
+     * Jetonu tek kullanımlık işaretler — YALNIZCA kayıt gerçekten tamamlanınca.
+     *
+     * ⚠️ Bunun `verify()` içinde yapılması gerçek bir hataydı ve tarayıcıda
+     * yakalandı: formun BAŞKA bir alanı hatalıysa (boş mağaza adı, şifre
+     * uyuşmazlığı, kullanılmış e-posta) jeton yine de yanıyordu; kullanıcı
+     * hatayı düzeltip tekrar gönderdiğinde "insan olduğunuzu doğrulayamadık"
+     * duvarına çarpıyor ve sayfayı yenilemeden ilerleyemiyordu. Yani koruma,
+     * botları değil hata yapan gerçek kullanıcıları kilitliyordu.
+     *
+     * @return bool false = jeton daha önce kullanılmış (tekrar oynatma)
+     */
+    public function consume(mixed $payload): bool
+    {
+        if (! is_string($payload) || $payload === '') {
+            return false;
         }
 
-        return HumanVerdict::pass($score);
+        $data = json_decode($payload, true);
+        $token = is_array($data) ? ($data['tok'] ?? null) : null;
+
+        if (! is_string($token)) {
+            return false;
+        }
+
+        $claims = $this->validateToken($token);
+
+        if (is_string($claims)) {
+            return false;
+        }
+
+        return $this->consumeOnce($token, now()->getTimestamp() - $claims['iat']);
     }
 
     /**

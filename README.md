@@ -286,6 +286,12 @@ klavye-only gezinen erişilebilirlik kullanıcısı yalnız tuş/odak sinyaliyle
 geçebilir. `navigator.webdriver` bayrağı ve payload'sız (JS'siz) istek doğrudan
 reddedilir.
 
+Jeton tek kullanımlıktır ama **yalnızca kayıt gerçekten tamamlanınca** yanar:
+formun başka bir alanı hatalıysa (boş alan, şifre uyuşmazlığı, kullanılmış
+e-posta) aynı jetonla tekrar denenebilir. Aksi hâlde koruma, botları değil
+hata yapan gerçek kullanıcıları kilitlerdi — bu hata tarayıcı testinde
+yakalandı ve `Human` kuralı tüketimi validator'ın `after` aşamasına taşıdı.
+
 Ayarlar (`config/talivio.php` → `human`): `TALIVIO_HUMAN_ENABLED`,
 `TALIVIO_HUMAN_MIN_SECONDS` (varsayılan 3 sn), `TALIVIO_HUMAN_MIN_SCORE`
 (varsayılan 3), `TALIVIO_HUMAN_TOKEN_TTL`, `TALIVIO_HUMAN_LOG_ONLY`.
