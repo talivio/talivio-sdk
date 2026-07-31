@@ -58,4 +58,33 @@ return [
         'brand_logo_height' => env('TALIVIO_MAIL_LOGO_HEIGHT', 28),
         'brand_color' => env('TALIVIO_MAIL_COLOR', '#0f172a'),
     ],
+
+    // Davranışsal insan doğrulaması (üçüncü partisiz "captcha").
+    // Kullanım: forma `<x-talivio::human-check />`, validasyona
+    // `'talivio_human' => [new \Talivio\Sdk\Human\Rules\Human]`.
+    'human' => [
+        'enabled' => env('TALIVIO_HUMAN_ENABLED', true),
+
+        // İmzalı jetonun ömrü (sn) — formu açık bırakıp sonra dolduranlar
+        // için geniş, tekrar-kullanım penceresini sınırlamak için sonlu.
+        'token_ttl' => env('TALIVIO_HUMAN_TOKEN_TTL', 7200),
+
+        // Form render'ından submit'e geçmesi gereken asgari süre (sn).
+        // İmzalı iat'a göre sunucuda ölçülür; istemci beyanına güvenilmez.
+        'min_seconds' => env('TALIVIO_HUMAN_MIN_SECONDS', 3),
+
+        // Davranış sinyallerinden toplanması gereken asgari puan.
+        // 3 = her gerçekçi insan akışının (klavye-only dahil) ulaşabildiği
+        // taban; yükseltmeden önce log'lardaki skor dağılımını izleyin.
+        'min_score' => env('TALIVIO_HUMAN_MIN_SCORE', 3),
+
+        // Gölge mod: karar loglanır ama kayıt asla engellenmez. Canlı bir
+        // üründe eşikleri gözlemleyerek açmak için önce bunu true yapın.
+        'log_only' => env('TALIVIO_HUMAN_LOG_ONLY', false),
+
+        // Test koşusunda kural varsayılan olarak atlanır (ürünlerin mevcut
+        // kayıt testleri davranış payload'ı üretemez); kuralın kendisini
+        // test eden senaryolar bunu true yapar.
+        'enforce_in_tests' => false,
+    ],
 ];

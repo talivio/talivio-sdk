@@ -51,6 +51,9 @@ class TalivioServiceProvider extends ServiceProvider
         // ve hem kuyruk işi hem HTTP isteği içinden çözülüyor.
         $this->app->singleton(IngestClient::class);
         $this->app->singleton(TalivioOps::class);
+
+        // Davranışsal insan doğrulaması (human-check bileşeni + Human kuralı).
+        $this->app->singleton(\Talivio\Sdk\Human\HumanCheck::class);
     }
 
     public function boot(): void

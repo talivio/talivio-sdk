@@ -1,0 +1,263 @@
+<?php
+
+namespace Talivio\Sdk\Human;
+
+use Illuminate\Support\Facades\Cache;
+
+/**
+ * Üçüncü partisiz (Google/Cloudflare'siz) davranışsal insan doğrulaması.
+ *
+ * Nasıl çalışır: kayıt formu render edilirken `issue()` imzalı, oturuma bağlı
+ * bir jeton üretir; sayfadaki toplayıcı (human-check bileşeni) fare/dokunma/
+ * klavye etkileşimlerini YALNIZCA toplam sayaç ve varyans olarak özetler —
+ * koordinat akışı, tuş içeriği veya parmak izi GÖNDERİLMEZ (GDPR: davranış
+ * özeti anlıktır, hiçbir yerde saklanmaz). `verify()` jetonu doğrular ve
+ * sinyalleri puanlar.
+ *
+ * Tehdit modeli: hedef, formu curl/httpx ile dolduran veya başsız tarayıcıyla
+ * anında submit eden EMTİA botlarıdır. Bu siteye özel yazılmış, gerçek insan
+ * hareketi taklit eden hedefli bir saldırganı davranış sinyali durduramaz —
+ * o katman için hız sınırı + e-posta doğrulama zaten ayrıca var.
+ *
+ * Puanlama pointer-tipine duyarlıdır: dokunmatik cihazda fare sinyali
+ * beklenmez (mobil çözüm budur), klavye-only gezinen erişilebilirlik
+ * kullanıcısı da yalnız tuş/odak sinyaliyle eşiği geçebilir.
+ */
+class HumanCheck
+{
+    /** Bir davranış payload'ının kabul edilebilir azami boyutu (byte). */
+    private const MAX_PAYLOAD_BYTES = 4096;
+
+    /**
+     * İmzalı jeton üretir: base64url(json{iat,nonce,sid}).hex_hmac.
+     *
+     * Oturum kimliği hash'lenerek jetona bağlanır — bir kurbanın sayfasından
+     * sızan jeton başka bir oturumun POST'unda geçmez. İmza uygulama
+     * anahtarıyla atılır; sunucu tarafında durum tutulmaz (yalnız tek-kullanım
+     * işareti cache'e düşer).
+     */
+    public function issue(): string
+    {
+        $claims = json_encode([
+            'iat' => now()->getTimestamp(),
+            'nonce' => bin2hex(random_bytes(8)),
+            'sid' => $this->sessionHash(),
+        ]);
+
+        $body = $this->base64UrlEncode($claims);
+
+        return $body.'.'.hash_hmac('sha256', $body, $this->key());
+    }
+
+    /**
+     * Formdan gelen davranış payload'ını değerlendirir.
+     *
+     * @param mixed $payload `talivio_human` alanının ham değeri
+     * @param string|null $honeypot Görünmez tuzak alanının değeri (dolu = bot)
+     */
+    public function verify(mixed $payload, ?string $honeypot = null): HumanVerdict
+    {
+        if (! is_string($payload) || $payload === '') {
+            // JS hiç çalışmamış: ya script'siz bir bot ya da JS'i kapalı,
+            // eşiği geçemeyecek bir istemci.
+            return HumanVerdict::fail(['missing_payload']);
+        }
+
+        if (strlen($payload) > self::MAX_PAYLOAD_BYTES) {
+            return HumanVerdict::fail(['oversized_payload']);
+        }
+
+        if (is_string($honeypot) && trim($honeypot) !== '') {
+            return HumanVerdict::fail(['honeypot']);
+        }
+
+        $data = json_decode($payload, true);
+
+        if (! is_array($data)) {
+            return HumanVerdict::fail(['bad_json']);
+        }
+
+        $claims = $this->validateToken($data['tok'] ?? null);
+
+        if (is_string($claims)) {
+            return HumanVerdict::fail([$claims]);
+        }
+
+        $age = now()->getTimestamp() - $claims['iat'];
+
+        if ($age < (int) config('talivio.human.min_seconds')) {
+            // İmzalı iat esas alınır — istemcinin bildirdiği süreye güvenilmez.
+            return HumanVerdict::fail(['too_fast']);
+        }
+
+        if (($this->intSignal($data, 'wd')) === 1) {
+            return HumanVerdict::fail(['webdriver']);
+        }
+
+        $score = $this->score($data);
+
+        if ($score < (int) config('talivio.human.min_score')) {
+            return HumanVerdict::fail(['low_score'], $score);
+        }
+
+        if (! $this->consumeOnce($data['tok'], $age)) {
+            return HumanVerdict::fail(['replayed'], $score);
+        }
+
+        return HumanVerdict::pass($score);
+    }
+
+    /**
+     * Sinyalleri puanlar. Eşikler emtia botlarının tipik "sıfır veya sabit"
+     * profiline göre seçildi; her gerçekçi insan akışı (masaüstü yazan,
+     * masaüstü autofill, mobil yazan, mobil autofill, klavye-only) en az
+     * min_score=3 toplayabilecek şekilde yollar çakıştırıldı.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function score(array $data): int
+    {
+        $s = fn (string $key): int => $this->intSignal($data, $key);
+        $score = 0;
+
+        // Fare: yeterli örneklem + mesafe. Yön değişimi (ma) ayrı puanlanır —
+        // sentetik doğrusal hareket mesafe biriktirir ama yön değiştirmez.
+        if ($s('mm') >= 10 && $s('md') >= 300) {
+            $score += 2;
+        }
+
+        if ($s('ma') >= 6) {
+            $score += 1;
+        }
+
+        // Dokunma: birden fazla ayrı dokunuş (alanlara/onay kutusuna/karta
+        // dokunmak) + kaydırma hareketi. Mobilin fare karşılığı budur.
+        if ($s('ts') >= 2) {
+            $score += 2;
+        }
+
+        if ($s('tc') >= 5) {
+            $score += 1;
+        }
+
+        // İvmeölçer gürültüsü: elde tutulan cihaz asla tam sabit değildir.
+        // (iOS 13+ izinsiz vermez — sinyal yoksa ceza da yok.)
+        if ($s('dm') >= 3) {
+            $score += 1;
+        }
+
+        // Klavye: kayıt formunu doldurmak gerçekçi olarak ≥12 tuş ister;
+        // insan tuş aralıklarının varyansı yüksektir (sabit aralık = script).
+        if ($s('ky') >= 12) {
+            $score += 1;
+        }
+
+        if ($s('kv') >= 900) {
+            $score += 1;
+        }
+
+        if ($s('fo') >= 2) {
+            $score += 1;
+        }
+
+        if ($s('cl') >= 1) {
+            $score += 1;
+        }
+
+        if ($s('sc') >= 3) {
+            $score += 1;
+        }
+
+        return $score;
+    }
+
+    /**
+     * Jetonu çözer ve doğrular; hata durumunda sebep string'i döndürür.
+     *
+     * @return array{iat: int, nonce: string, sid: string}|string
+     */
+    private function validateToken(mixed $token): array|string
+    {
+        if (! is_string($token) || substr_count($token, '.') !== 1) {
+            return 'bad_token';
+        }
+
+        [$body, $sig] = explode('.', $token, 2);
+
+        if (! hash_equals(hash_hmac('sha256', $body, $this->key()), $sig)) {
+            return 'bad_signature';
+        }
+
+        $claims = json_decode($this->base64UrlDecode($body), true);
+
+        if (! is_array($claims) || ! is_int($claims['iat'] ?? null) || ! is_string($claims['nonce'] ?? null)) {
+            return 'bad_claims';
+        }
+
+        $age = now()->getTimestamp() - $claims['iat'];
+
+        if ($age < 0 || $age > (int) config('talivio.human.token_ttl')) {
+            return 'expired';
+        }
+
+        // Jeton, üretildiği oturuma bağlıdır. GET ile POST arasında oturum
+        // (normalde) değişmez; sid'siz üretilmiş bir jeton sid'li isteği
+        // geçemez — iki taraf birebir eşleşmeli.
+        if (($claims['sid'] ?? '') !== $this->sessionHash()) {
+            return 'session_mismatch';
+        }
+
+        return $claims;
+    }
+
+    /**
+     * Jetonu tek kullanımlık yapar: aynı jeton (ve dolayısıyla aynı kayıtlı
+     * davranış özeti) TTL içinde ikinci bir kayıtta tekrar kullanılamaz.
+     */
+    private function consumeOnce(string $token, int $age): bool
+    {
+        $remaining = max(60, (int) config('talivio.human.token_ttl') - $age);
+
+        return Cache::add('talivio:human:'.hash('sha256', $token), 1, $remaining);
+    }
+
+    private function sessionHash(): string
+    {
+        $request = request();
+
+        if (! $request->hasSession()) {
+            return '';
+        }
+
+        return hash('sha256', $request->session()->getId());
+    }
+
+    /** @param array<string, mixed> $data */
+    private function intSignal(array $data, string $key): int
+    {
+        $value = $data[$key] ?? 0;
+
+        return is_numeric($value) ? (int) $value : 0;
+    }
+
+    private function key(): string
+    {
+        $key = (string) config('app.key');
+
+        if (str_starts_with($key, 'base64:')) {
+            $key = base64_decode(substr($key, 7));
+        }
+
+        return $key;
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    private function base64UrlDecode(string $value): string
+    {
+        return (string) base64_decode(strtr($value, '-_', '+/'));
+    }
+}

@@ -251,3 +251,53 @@ TALIVIO_DELETION_BEHAVIOR=unlink
 
 `unlink` keeps the local account but clears its `talivio_id`, severing the SSO
 link. The endpoint is idempotent — retries and unknown IDs return success.
+
+## Human check — üçüncü partisiz davranışsal bot doğrulaması (v1.20.0)
+
+Kayıt formlarını Google reCAPTCHA / Cloudflare Turnstile gibi üçüncü parti
+servislere bağlamadan emtia botlarına kapatır. İki parça:
+
+```blade
+<form method="POST" action="{{ route('register') }}">
+    @csrf
+    ...
+    <x-talivio::human-check />   {{-- form İÇİNE --}}
+</form>
+```
+
+```php
+$request->validate([
+    ...
+    'talivio_human' => [new \Talivio\Sdk\Human\Rules\Human],
+]);
+```
+
+Nasıl çalışır: bileşen, imzalı + oturuma bağlı + tek kullanımlık bir jeton ve
+görünmez bir tuzak alan (honeypot) basar; satır içi vanilla JS toplayıcı fare
+hareketi (mesafe/yön değişimi), dokunma (touchstart/touchmove — **mobil çözüm
+budur**), ivmeölçer gürültüsü, tuş sayısı/aralık varyansı, odak ve tıklama
+sinyallerini yalnızca **toplam sayaç/varyans özetleri** olarak gönderir
+(koordinat akışı, tuş içeriği, parmak izi yok — GDPR dostu). `Human` kuralı
+jetonu doğrular (HMAC, TTL, oturum eşleşmesi, tekrar-kullanım engeli, asgari
+süre) ve sinyalleri puanlar; `min_score` altı kalan istek reddedilir.
+
+Puanlama pointer-tipine duyarlıdır: dokunmatik cihazda fare sinyali beklenmez,
+klavye-only gezinen erişilebilirlik kullanıcısı yalnız tuş/odak sinyaliyle
+geçebilir. `navigator.webdriver` bayrağı ve payload'sız (JS'siz) istek doğrudan
+reddedilir.
+
+Ayarlar (`config/talivio.php` → `human`): `TALIVIO_HUMAN_ENABLED`,
+`TALIVIO_HUMAN_MIN_SECONDS` (varsayılan 3 sn), `TALIVIO_HUMAN_MIN_SCORE`
+(varsayılan 3), `TALIVIO_HUMAN_TOKEN_TTL`, `TALIVIO_HUMAN_LOG_ONLY`.
+
+Canlı bir üründe ilk açılışta `TALIVIO_HUMAN_LOG_ONLY=true` ile gölge modda
+başlatıp log'lardaki (`talivio.human: ...`) skor dağılımını izleyin, sonra
+enforce'a geçin. Test koşularında kural kendiliğinden atlanır
+(`enforce_in_tests` ile açılır) — ürünlerin mevcut kayıt testleri kırılmaz.
+
+Tehdit modeli dürüstlüğü: bu katman formu script'le dolduran emtia botlarını
+ve başsız tarayıcıları durdurur; siteye özel yazılmış, insan hareketi taklit
+eden hedefli bir saldırganı durdurmaz — o katman için throttle + e-posta
+doğrulama zaten var. Native mobil uygulamalar web bileşenini kullanamaz;
+`HumanCheck::verify()` taşıma-bağımsızdır, aynı payload şeklini üreten bir
+istemci API üzerinden de doğrulanabilir.
