@@ -37,6 +37,19 @@
     </div>
     <input type="hidden" name="talivio_human" value="" @if ($livewire) wire:model="{{ $model }}" @endif>
     {{--
+        JS'siz istemci payload üretemez ve kural onu REDDEDER. Uyarı olmadan
+        bu sessiz bir çıkmazdı: kullanıcı formu baştan sona doldurup gönderiyor,
+        karşılığında "insan olduğunuzu doğrulayamadık" alıyor ve mesaj sayfayı
+        yenilemesini söylüyor — yenilemek JS'i açmadığı için sonsuz döngü.
+        Uyarı ÖNDE veriliyor ki emeği boşa gitmeden ya JS'i açsın ya destek
+        kanalına gitsin. Satır içi stil bilinçli: SDK ürünün CSS'ini bilmez.
+    --}}
+    <noscript>
+        <p style="margin:.75rem 0;padding:.75rem 1rem;border:1px solid #f59e0b;border-radius:.5rem;background:#fffbeb;color:#78350f;font-size:.875rem;line-height:1.5;">
+            {{ __('talivio::human.javascript_required') }}
+        </p>
+    </noscript>
+    {{--
         CSP nonce: nonce'lu content-security-policy kullanan ürünlerde
         (Vite::useCspNonce() — ör. vatlio/FinAI/canopyproof) satır içi script
         nonce'suz SESSİZCE engellenir ve payload hiç dolmaz — her gerçek

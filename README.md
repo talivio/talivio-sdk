@@ -286,6 +286,13 @@ klavye-only gezinen erişilebilirlik kullanıcısı yalnız tuş/odak sinyaliyle
 geçebilir. `navigator.webdriver` bayrağı ve payload'sız (JS'siz) istek doğrudan
 reddedilir.
 
+JS'i kapalı kullanıcı bileşenin `<noscript>` uyarısını **formu doldurmadan
+önce** görür (v1.21.3). Öncesinde bu sessiz bir çıkmazdı: formu doldurup
+gönderiyor, "insan olduğunuzu doğrulayamadık — sayfayı yenileyin" alıyor,
+yenilemek JS'i açmadığı için aynı yere düşüyordu. Hem uyarı hem hata mesajı
+artık destek kanalına yönlendiriyor; işlemin elle tamamlanabilmesi bilinçli
+bir kaçış valfi (erişilebilirlik + kilitlenme önleme).
+
 Jeton tek kullanımlıktır ama **yalnızca kayıt gerçekten tamamlanınca** yanar:
 formun başka bir alanı hatalıysa (boş alan, şifre uyuşmazlığı, kullanılmış
 e-posta) aynı jetonla tekrar denenebilir. Aksi hâlde koruma, botları değil
