@@ -19,7 +19,14 @@
         </label>
     </div>
     <input type="hidden" name="talivio_human" value="">
-    <script>
+    {{--
+        CSP nonce: nonce'lu content-security-policy kullanan ürünlerde
+        (Vite::useCspNonce() — ör. vatlio/FinAI/canopyproof) satır içi script
+        nonce'suz SESSİZCE engellenir ve payload hiç dolmaz — her gerçek
+        kullanıcı "insan değilsiniz" hatası alırdı. Nonce yoksa boş kalır.
+    --}}
+    @php($tlNonce = \Illuminate\Support\Facades\Vite::cspNonce())
+    <script @if ($tlNonce) nonce="{{ $tlNonce }}" @endif>
     (function () {
         'use strict';
         var script = document.currentScript;
