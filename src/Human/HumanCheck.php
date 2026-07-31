@@ -28,6 +28,22 @@ class HumanCheck
     /** Bir davranış payload'ının kabul edilebilir azami boyutu (byte). */
     private const MAX_PAYLOAD_BYTES = 4096;
 
+    /** @var string|null Satır içine basılan toplayıcı — istek başına bir kez okunur. */
+    private static ?string $collector = null;
+
+    /**
+     * Blade bileşeninin satır içine bastığı toplayıcı JS'i.
+     *
+     * Kaynak dosya ESM sarmalayıcısı DEĞİL, çekirdektir (`talivio-human-core.js`):
+     * o dosya bilinçli olarak `import`/`export` içermez, çünkü aynı metin hem
+     * klasik `<script>` etiketinde hem bundler içinde çalışmak zorunda. Böylece
+     * Blade ve SPA yolları tek bir uygulamayı paylaşır.
+     */
+    public static function collectorScript(): string
+    {
+        return self::$collector ??= (string) file_get_contents(__DIR__.'/../../resources/js/talivio-human-core.js');
+    }
+
     /**
      * İmzalı jeton üretir: base64url(json{iat,nonce,sid}).hex_hmac.
      *

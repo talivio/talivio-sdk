@@ -23,6 +23,7 @@ use Talivio\Sdk\Ai\Transports\FakeTransport;
 use Talivio\Sdk\Ai\Transports\HttpTransport;
 use Talivio\Sdk\Console\HeartbeatCommand;
 use Talivio\Sdk\Http\Controllers\AccountDeletionController;
+use Talivio\Sdk\Http\Controllers\HumanTokenController;
 use Talivio\Sdk\Ingest\IngestClient;
 use Talivio\Sdk\Ingest\TalivioOps;
 use Talivio\Sdk\Http\Controllers\SupportFormController;
@@ -228,6 +229,12 @@ class TalivioServiceProvider extends ServiceProvider
             Route::post('/talivio/support', [SupportFormController::class, 'store'])
                 ->middleware('throttle:5,1')
                 ->name('talivio.support.store');
+
+            // SPA'lar için insan-doğrulama jetonu (Blade formları jetonu zaten
+            // sayfaya basılmış hâlde alır, bu uca hiç gitmez).
+            Route::get('/talivio/human/token', HumanTokenController::class)
+                ->middleware('throttle:30,1')
+                ->name('talivio.human.token');
 
             Route::middleware('auth:'.config('talivio.guard'))->group(function () {
                 Route::get('/talivio/link', [TalivioAuthController::class, 'link'])->name('talivio.link');

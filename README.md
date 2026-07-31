@@ -295,6 +295,53 @@ başlatıp log'lardaki (`talivio.human: ...`) skor dağılımını izleyin, sonr
 enforce'a geçin. Test koşularında kural kendiliğinden atlanır
 (`enforce_in_tests` ile açılır) — ürünlerin mevcut kayıt testleri kırılmaz.
 
+### Livewire / Volt
+
+Livewire formu klasik POST etmez; sunucuya bileşenin property'leri gider, DOM'daki
+gizli alanın değeri **gitmez**. Bu yüzden Livewire'da üç şey gerekir:
+
+```blade
+<form wire:submit="register">
+    ...
+    <x-talivio::human-check livewire />
+</form>
+```
+
+```php
+public string $talivio_human = '';
+public string $tl_website = '';   // tuzak alan
+
+$this->validate([
+    // Honeypot ARGÜMANLA verilir: Livewire isteğinde `tl_website` düz bir
+    // girdi olarak gelmez, kural onu istekten okuyamaz.
+    'talivio_human' => [new \Talivio\Sdk\Human\Rules\Human($this->tl_website)],
+]);
+```
+
+⚠️ `wire:model.live` KULLANMAYIN — toplayıcı değeri etkileşim boyunca tazelediği
+için her tazeleme bir ağ isteğine dönerdi. Ertelenmiş (varsayılan) `wire:model`
+değeri bir sonraki eylemle birlikte gönderir; istenen davranış budur.
+
+### Inertia / Vue / React (kendi formunu JS'te kuran ürünler)
+
+Blade bileşeni yerine ESM modülü kullanılır — ikisi de AYNI toplayıcı çekirdeğini
+çalıştırır, davranış birebir aynıdır:
+
+```js
+import { createHumanCheck } from '../../vendor/talivio/sdk/resources/js/talivio-human.js';
+
+const human = createHumanCheck();   // jetonu GET /talivio/human/token'dan alır
+
+const submit = () => {
+    form.talivio_human = human.payload();
+    form.post(route('register'));
+};
+```
+
+Sunucu tarafı klasik formla aynıdır (`'talivio_human' => [new Human]`); honeypot
+alanı normal bir istek girdisi olarak gittiği için argüman gerekmez. Tuzak alanı
+formun state'ine eklemeyi unutmayın (`tl_website: ''`).
+
 Tehdit modeli dürüstlüğü: bu katman formu script'le dolduran emtia botlarını
 ve başsız tarayıcıları durdurur; siteye özel yazılmış, insan hareketi taklit
 eden hedefli bir saldırganı durdurmaz — o katman için throttle + e-posta

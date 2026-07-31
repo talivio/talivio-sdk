@@ -22,6 +22,17 @@ class Human implements ValidationRule
     /** Alan istekte yokken de kuralın koşmasını sağlar. */
     public bool $implicit = true;
 
+    /**
+     * @param string|null $honeypot Tuzak alanın değeri. Klasik formlarda ve
+     *   Inertia'da boş bırakılır — kural onu istekten (`tl_website`) okur.
+     *   LIVEWIRE'da mutlaka verilmelidir (`new Human($this->tl_website)`):
+     *   Livewire isteğinde alanlar bileşen payload'ının içinde taşınır, düz
+     *   `tl_website` girdisi olarak GELMEZ ve tuzak sessizce ölü kalırdı.
+     */
+    public function __construct(private readonly ?string $honeypot = null)
+    {
+    }
+
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! config('talivio.human.enabled')) {
@@ -34,7 +45,10 @@ class Human implements ValidationRule
             return;
         }
 
-        $verdict = app(HumanCheck::class)->verify($value, request()->input('tl_website'));
+        $verdict = app(HumanCheck::class)->verify(
+            $value,
+            $this->honeypot ?? request()->input('tl_website'),
+        );
 
         if ($verdict->passed) {
             return;
