@@ -246,10 +246,21 @@ class HumanCheck
             return 'expired';
         }
 
-        // Jeton, üretildiği oturuma bağlıdır. GET ile POST arasında oturum
-        // (normalde) değişmez; sid'siz üretilmiş bir jeton sid'li isteği
-        // geçemez — iki taraf birebir eşleşmeli.
-        if (($claims['sid'] ?? '') !== $this->sessionHash()) {
+        /*
+         * Jeton, üretildiği oturuma bağlıdır: sızdırılan bir jeton başka bir
+         * oturumun gönderiminde geçmez.
+         *
+         * ⚠️ Oturum kimliği ŞU ANKİ bağlamda hiç bulunamıyorsa bağ SESSİZCE
+         * ATLANIR, "eşleşmedi" sayılmaz. Gerekçesi bir başarısızlık modunun
+         * asimetrisi: bu kontrolün gereksiz yere geçmesi korumayı bir kademe
+         * zayıflatır (jeton hâlâ imzalı, süreli, tek kullanımlık ve davranış
+         * puanı istiyor), ama gereksiz yere KALMASI ürünün bütün kayıtlarını
+         * hiçbir uyarı vermeden reddeder. Saldırgan sunucuyu oturumsuz bir
+         * bağlama zorlayamaz — web istekleri her zaman oturum taşır.
+         */
+        $currentSession = $this->sessionHash();
+
+        if ($currentSession !== '' && ($claims['sid'] ?? '') !== $currentSession) {
             return 'session_mismatch';
         }
 
@@ -267,15 +278,39 @@ class HumanCheck
         return Cache::add('talivio:human:'.hash('sha256', $token), 1, $remaining);
     }
 
+    /**
+     * Jetonu oturuma bağlayan kimlik.
+     *
+     * ⚠️ Önce istek nesnesine, o taşımıyorsa GLOBAL oturum deposuna bakılır.
+     * Yalnızca `request()->hasSession()`'a güvenmek sessiz bir felaket
+     * kapısıydı: oturumu isteğe bağlamayan bir bağlamda (Livewire'ın kendi
+     * istek nesnesi, testte böyle davranıyor) jeton bir tarafta gerçek
+     * oturumla, diğer tarafta boş kimlikle hesaplanır ve ürünün TÜM kayıtları
+     * "insan değilsiniz" ile reddedilirdi — hiçbir uyarı vermeden.
+     *
+     * Oturum hiç başlamamışsa (konsol, kuyruk) iki taraf da boş döner ve bağ
+     * devre dışı kalır; bu bilinçli: orada zaten oturum kavramı yoktur.
+     */
     private function sessionHash(): string
     {
         $request = request();
 
-        if (! $request->hasSession()) {
-            return '';
+        if ($request->hasSession()) {
+            return hash('sha256', $request->session()->getId());
         }
 
-        return hash('sha256', $request->session()->getId());
+        if (app()->bound('session.store')) {
+            // `isStarted()` ARANMAZ: istek tamamlandıktan sonra depo kaydedilip
+            // "başlamamış" duruma döner ama kimliği korur — aradığımız da tam
+            // olarak o kimliktir.
+            $id = app('session.store')->getId();
+
+            if (is_string($id) && $id !== '') {
+                return hash('sha256', $id);
+            }
+        }
+
+        return '';
     }
 
     /** @param array<string, mixed> $data */
