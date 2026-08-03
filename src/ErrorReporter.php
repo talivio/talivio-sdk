@@ -36,6 +36,23 @@ class ErrorReporter
             return;
         }
 
+        /*
+         * ⚠️ 2026-08-03 — `php artisan tinker` İÇİNDE ÇALIŞTIRILAN KODUN
+         * HATASI GERÇEK BİR ÜRÜN HATASI DEĞİLDİR. Bir operatörün REPL'e
+         * yazdığı yanlış sütun adı / tanımsız fonksiyon, PsySH'nin PARSE
+         * hatasından (o zaten `Psy\Exception\*` sınıfıyla ayrı bir istisna)
+         * farklı olarak, GERÇEK sınıflarla (Error, PDOException,
+         * QueryException) fırlar — sınıf adına bakarak ayırt edilemez.
+         * Ancak PHP'nin `eval()`/`-r` yolu, istisnanın dosyasını gerçek bir
+         * yol yerine sabit "Command line code" metniyle doldurur; bu, tüm
+         * ürünlerdeki `talivio/sdk` kurulu her uygulamada aynı gürültüyü
+         * üretiyordu (talivio.com'un KENDİ hook'u zaten yalnızca PsySH
+         * parse hatalarını eliyordu, bu farklı ve daha genel bir sızıntıydı).
+         */
+        if ($e->getFile() === 'Command line code') {
+            return;
+        }
+
         try {
             $request = app('request');
             $talivioId = null;
