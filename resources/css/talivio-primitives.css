@@ -74,6 +74,12 @@
      *
      * Üç katman: yakın kenar + orta + geniş yayılma. Tek katmanlı gölge ya sert
      * ya bulanık kalıyor, blok zeminden "kalkmış" görünmüyor.
+     *
+     * ⚠️ Bu sınıfın İÇİNDE `backdrop-filter` ÇALIŞMAZ: `filter` uygulayan ata
+     * yeni bir backdrop kökü kurar, içteki blur örnekleyecek arka plan
+     * bulamaz ve sessizce hiçbir şey yapmaz. `.lift` altındaki cam yüzeyler
+     * blur'a değil OPAKLIĞA (≥0.9) dayanmalı — MOSA'da 2026-08-11'de açılır
+     * menünün içinden arkadaki başlık okunuyordu.
      */
     .lift {
         filter:

@@ -25,8 +25,10 @@
  * ── Tailwind v3 kullanan ürünlerde ────────────────────────────────────────
  *   `@layer components` ve `@apply` aynı çalışır. Tek fark koyu tema
  *   seçicisi: v3'te `tailwind.config.js` içine
- *       darkMode: ['class', '[data-theme="dark"]']
- *   yazın. Aşağıdaki `:where([data-theme='dark'], .dark)` seçicileri düz CSS
+ *       darkMode: ['class', ':is(.dark, [data-theme="dark"])']
+ *   yazın. (⚠️ `['class', '[data-theme="dark"]']` DEĞİL: v3'te ikinci öğe
+ *   `.dark`'ın YERİNE geçer; `<html class="dark">` kullanan üründe tüm
+ *   `dark:` varyantları sessizce ölür — MOSA'da 2026-08-11'de yaşandı.) Aşağıdaki `:where([data-theme='dark'], .dark)` seçicileri düz CSS
  *   olduğu için her iki dünyada da (öznitelik ya da `.dark` sınıfı) çalışır;
  *   `@apply`'ın içindeki `dark:` varyantı ise ürünün kendi yapılandırmasına
  *   bakar — o yüzden yukarıdaki satır gerekli.

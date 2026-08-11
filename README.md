@@ -161,6 +161,24 @@ Products that theme the brand color should define `--color-brand-50…900` in
 their `@theme` block (see ai.talivio.com); without them the focus ring falls
 back to Talivio blue and `text-brand-300` simply inherits its parent color.
 
+### 1b. Non-Laravel PHP surfaces (plain PHP, static HTML)
+
+Plain-PHP products (MOSA website, MOSA Internet Gateway pages) consume the same
+CSS files from `vendor/` — the package installs fine without Laravel; nothing
+autoloads unless used. Blade components don't work there, so the package ships
+plain-PHP equivalents that read the SAME `lang/*/footer.php` texts:
+
+```php
+$talivioFooter = ['product' => 'MOSA', 'tagline' => '…', 'locale' => 'tr',
+                  'links' => [['href' => '/x', 'label' => 'Gateway']]];
+require $vendorPath.'/talivio/sdk/resources/plain/footer.php';   // footer
+$talivioLogo = ['class' => 'h-8 w-8', 'onDark' => true];
+require $vendorPath.'/talivio/sdk/resources/plain/logo.php';     // brand SVG
+```
+
+Their Tailwind build must scan `vendor/talivio/sdk/resources/plain/**/*.php`
+(same reason as §2 below). Contract details: `tasarim-dili.md` §7.
+
 ### 2. ⚠️ Scanning the package views is MANDATORY
 
 Add this line to `app.css` as well:
