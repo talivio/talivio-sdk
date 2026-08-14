@@ -12,7 +12,16 @@ declare(strict_types=1);
  */
 return [
 
-    'base_url' => env('TALIVIO_AI_BASE_URL', 'https://ai.talivio.com'),
+    /*
+     * ⚠️ VARSAYILAN ADRES `ai-gateway.talivio.com` — `ai.talivio.com` DEĞİL
+     * (2026-08-14 düzeltmesi): talivio-ai reposunun dokümanları servisi
+     * "ai.talivio.com" olarak PLANLAMIŞTI ama üretim hiç o adrese kurulmadı
+     * (DNS kaydı bile yok) — gerçek deploy ai-gateway.talivio.com. Eski
+     * varsayılan yüzünden Replio üretimde çözümlenemeyen bir host'a istek
+     * atıp AI'yı sessizce devre dışı bırakıyordu (zarif bozulma bunu hata
+     * olarak bile göstermedi — bkz. aşağıdaki 'degradation').
+     */
+    'base_url' => env('TALIVIO_AI_BASE_URL', 'https://ai-gateway.talivio.com'),
     'key' => env('TALIVIO_AI_KEY'),
 
     /*
