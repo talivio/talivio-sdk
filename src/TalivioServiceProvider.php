@@ -70,21 +70,10 @@ class TalivioServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([HeartbeatCommand::class, MigrationReportCommand::class, MigrationProbeCommand::class]);
             $this->scheduleHeartbeat();
-        $this->scheduleMigrationProbe();
+            $this->scheduleMigrationProbe();
         }
     }
 
-    /**
-     * Heartbeat'i SDK'nın kendisi zamanlar. Önceden komut yalnızca kaydediliyor,
-     * zamanlaması her ürünün kendi `routes/console.php`'sine elle kopyalanıyordu
-     * — kopyalanmayan ürünler hiç sinyal göndermiyor, hub tarafındaki bekçi de
-     * onları sürekli "sustu" sanıyordu. Artık paketi kuran her ürün otomatik
-     * olarak sinyal verir.
-     *
-     * Token yoksa komut zaten no-op olduğu için geliştirme ortamında zararsızdır.
-     * Ürün zamanlamayı kendi devralmak isterse config'te `heartbeat_schedule`'ı
-     * false yapıp kendi Schedule kaydını yazar.
-     */
     /**
      * talivio-ai 2.MIG.24/27 — göç ölçümünün DÜZENLİ koşması.
      *
@@ -121,6 +110,17 @@ class TalivioServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Heartbeat'i SDK'nın kendisi zamanlar. Önceden komut yalnızca kaydediliyor,
+     * zamanlaması her ürünün kendi `routes/console.php`'sine elle kopyalanıyordu
+     * — kopyalanmayan ürünler hiç sinyal göndermiyor, hub tarafındaki bekçi de
+     * onları sürekli "sustu" sanıyordu. Artık paketi kuran her ürün otomatik
+     * olarak sinyal verir.
+     *
+     * Token yoksa komut zaten no-op olduğu için geliştirme ortamında zararsızdır.
+     * Ürün zamanlamayı kendi devralmak isterse config'te `heartbeat_schedule`'ı
+     * false yapıp kendi Schedule kaydını yazar.
+     */
     private function scheduleHeartbeat(): void
     {
         if (! config('talivio.heartbeat_schedule', true)) {
@@ -140,7 +140,7 @@ class TalivioServiceProvider extends ServiceProvider
      *
      * ⚠️ Sağlayıcıya DOĞRUDAN yol yok (ADR-17): burada yalnızca ağ geçidinin
      * adresi ve anahtarı var. Ağ geçidi erişilemezse ürün AI'sız çalışmaya
-     * devam eder (), kendi başına sağlayıcıya gitmez.
+     * devam eder (bkz. `talivio-ai.degradation`), kendi başına sağlayıcıya gitmez.
      */
     private function registerAi(): void
     {

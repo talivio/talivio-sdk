@@ -1,29 +1,62 @@
 # talivio/sdk
 
-Talivio Accounts SSO + central error/support telemetry for every Talivio product. Ports the same revenue-engine pattern used across Talivio's SaaS apps: one package, drop it in, done.
+One package that gives a Laravel application everything it needs to be part of
+the Talivio platform:
 
-## Install (per product)
+- **Talivio Accounts SSO** — a single sign-on button, account linking, and a
+  GDPR account-deletion webhook.
+- **Central telemetry** — errors, support tickets, heartbeats, and business
+  events flow to the Talivio hub with no per-product wiring.
+- **Talivio AI gateway client** — one text/embedding client that degrades
+  gracefully instead of throwing when the gateway is unreachable.
+- **Shared design language** — the Talivio look, footer, logo, and mail theme,
+  so every product stays visually consistent from one source.
+- **Human check** — behavioural bot protection for public forms, with no
+  third-party service.
 
-1. **Register the product in talivio.com** — `/admin/applications` → create → fill name + URL. This provisions an OAuth client and an ingest token, shown once.
+Every feature is optional. Install the package, use the parts you need; nothing
+autoloads unless you touch it.
 
-2. **Add the package** — pin the exact GitHub URL as a VCS repository:
+> **Licence:** this repository is publicly readable but **not open source**.
+> See [LICENSE](LICENSE) before using any part of it outside Talivio.
+
+## Requirements
+
+| | |
+|---|---|
+| PHP | 8.2+ |
+| Laravel | 10, 11, 12, or 13 |
+| Optional | Laravel Socialite (SSO), Tailwind CSS (design language) |
+
+The plain-PHP footer and logo helpers work without Laravel.
+
+## Installation
+
+### 1. Register the product
+
+Create the application record in the Talivio hub admin. It issues an OAuth
+client and an ingest token — both are shown **once**, at creation time.
+
+### 2. Require the package
+
+`talivio/sdk` is **not published on Packagist**. Pin this repository as a VCS
+source in `composer.json` *before* requiring it:
 
 ```json
 "repositories": [
     { "type": "vcs", "url": "https://github.com/talivio/talivio-sdk.git" }
 ],
 "require": {
-    "talivio/sdk": "^1.17"
+    "talivio/sdk": "^1.23"
 }
 ```
 
-⚠️ **The `repositories` block above is not optional — it is the dependency-confusion
-guard.** `talivio/sdk` is **not published on Packagist**. Composer resolves package
-names from every repository it knows about, including Packagist, unless a name match
-in an earlier entry wins first. Without the VCS pin, a future Packagist account
-claiming the name `talivio/sdk` would be installed silently instead of this package —
-`composer install` gives no warning either way. Every product in this org already
-pins this repository entry; do not `composer require talivio/sdk` without it first.
+> ⚠️ **The `repositories` block is not optional — it is the
+> dependency-confusion guard.** Composer resolves a package name against every
+> repository it knows, Packagist included, and the first match wins. Without
+> this pin, anyone who registers the name `talivio/sdk` on Packagist would be
+> installed instead of this package, and `composer install` would report
+> nothing unusual. Never run `composer require talivio/sdk` before adding it.
 
 ```bash
 composer require talivio/sdk
@@ -32,9 +65,9 @@ php artisan vendor:publish --tag=talivio-config
 php artisan migrate
 ```
 
-3. **.env**:
+### 3. Configure the environment
 
-```
+```dotenv
 TALIVIO_HUB_URL=https://talivio.com
 TALIVIO_CLIENT_ID=...
 TALIVIO_CLIENT_SECRET=...
@@ -42,48 +75,77 @@ TALIVIO_INGEST_TOKEN=...
 TALIVIO_WEBHOOK_SECRET=...
 ```
 
-⚠️ **`TALIVIO_INGEST_TOKEN` olmadan telemetri tamamen sessizdir** — hata da log
-da üretmez, ürün panelde hiç var olmamış gibi görünür. Denetimde 11 ürünün SDK'yı
-kurup bu anahtarı hiç tanımlamadığı, dolayısıyla aylardır hiçbir şey göndermediği
-ortaya çıktı. Kurulumdan sonra `php artisan talivio:heartbeat -v` ile bir kez
-doğrulayın.
+No credential is ever stored in this package. Every secret is read from the
+host application's environment at runtime.
 
-`TALIVIO_WEBHOOK_SECRET` GDPR silme çağrısının imza anahtarıdır. Tanımlanmazsa
-`TALIVIO_INGEST_TOKEN`'a geri düşülür (eski davranış), ama hub artık ingest
-token'ını hash'li sakladığı ve döndürülebilir yaptığı için ayrı bir anahtar
-kullanmak gerekir.
+> ⚠️ **Without `TALIVIO_INGEST_TOKEN`, telemetry is completely silent** — it
+> raises no error and writes no log, and the product simply never appears in
+> the hub. This failure mode is easy to miss for months. Verify the wiring once
+> after install:
+>
+> ```bash
+> php artisan talivio:heartbeat -v
+> ```
 
-4. **Add the button** to your login/register Blade views:
+`TALIVIO_WEBHOOK_SECRET` signs the GDPR deletion callback. If it is unset, the
+package falls back to verifying with `TALIVIO_INGEST_TOKEN` (legacy behaviour),
+but the two should be separate: the hub stores ingest tokens hashed and allows
+them to be rotated, and a rotation would otherwise invalidate in-flight
+deletion callbacks.
+
+### 4. Add the sign-in button
 
 ```blade
 <x-talivio::accounts-button />
 ```
 
-5. **Error telemetry and heartbeat** work with zero extra code — the package
-hooks into your app's own exception handler automatically, **and schedules the
-heartbeat itself** (v1.10.0'dan beri, 5 dakikada bir). `routes/console.php`'ye
-elle satır eklemeyin: SDK'nın zamanlamasıyla çakışır ve heartbeat iki kez gider.
-Zamanlamayı devralmak isterseniz `config/talivio.php`'de
-`heartbeat_schedule => false` yapın.
+Error telemetry and the heartbeat need **no further code** — the package hooks
+into the application's own exception handler and registers its own schedule
+entry (every five minutes). Do not add a `talivio:heartbeat` line to
+`routes/console.php`; it would collide with the package's schedule and send the
+heartbeat twice. To take the schedule over yourself, set
+`heartbeat_schedule => false` in `config/talivio.php`.
 
-6. **Support form** (optional): drop `<x-talivio::support-form />` anywhere.
-`:priority="true"` verirseniz öncelik seçici de çıkar.
+That is the whole install: sign-in button, error reporting, and support tickets
+all appear in the hub.
 
-That's it — login button, error logs, and support tickets all show up in talivio.com's "Talivio Accounts" / "Talivio Ops" admin panels.
+## Talivio Accounts (SSO)
 
-## İş olayları — üyelik, abonelik, satış, başvuru
+| Route | Purpose |
+|---|---|
+| `GET /talivio/login` | Start the OAuth redirect |
+| `GET /talivio/callback` | Handle the OAuth return |
+| `GET /talivio/link` | Link Talivio Accounts to the signed-in local user |
+| `POST /talivio/unlink` | Sever the link, keep the local account |
+| `POST /talivio/account-deleted` | GDPR cascade from the hub (HMAC-signed) |
 
-Hata ve destek telemetrisi kendiliğinden akar; **iş olaylarını ürün gönderir.**
-Bunlar panelin "Talivio Ops" bölümündeki Üyelikler / Abonelikler / Satışlar /
-Üyelik Başvuruları listelerini ve dashboard'daki gelir kutucuklarını besler.
+Blade components:
+
+```blade
+<x-talivio::accounts-button />   {{-- login / register screens --}}
+<x-talivio::link-account />      {{-- account settings screen --}}
+<x-talivio::support-form />      {{-- support ticket form, anywhere --}}
+```
+
+`<x-talivio::support-form :priority="true" />` adds a priority selector.
+
+The identity is stored on the user model in the `talivio_id` column, created by
+the published migration. Change the guard, user model, or post-login redirect in
+`config/talivio.php`.
+
+## Business events
+
+Errors and support tickets flow on their own. **Business events are sent by the
+product** — they feed the hub's membership, subscription, sales, and signup
+lists, and the revenue figures on its dashboard.
 
 ```php
 use Talivio\Sdk\Facades\TalivioOps;
 
-// Ödeme sağlayıcınızın webhook handler'ında:
+// In your payment provider's webhook handler:
 TalivioOps::sale([
-    'external_id' => $charge->id,      // zorunlu — tekilleştirme anahtarı
-    'status' => 'paid',                 // zorunlu
+    'external_id' => $charge->id,      // required — deduplication key
+    'status' => 'paid',                 // required
     'customer_email' => $charge->email,
     'amount' => $charge->amount / 100,
     'currency' => 'EUR',
@@ -92,36 +154,109 @@ TalivioOps::sale([
 ]);
 ```
 
-Dört metot da `(application_id, external_id)` üzerinden **upsert** yapar: aynı
-olayı her durum değişiminde yeniden göndermek güvenlidir, çift kayıt oluşmaz.
-
-| Metot | Uç | Zorunlu alanlar |
+| Method | Endpoint | Required fields |
 |---|---|---|
 | `TalivioOps::member()` | `/api/ingest/members` | `external_id`, `kind`, `status` |
 | `TalivioOps::subscription()` | `/api/ingest/subscriptions` | `external_id`, `status` |
 | `TalivioOps::sale()` | `/api/ingest/sales` | `external_id`, `status` |
 | `TalivioOps::signupApplication()` | `/api/ingest/signup-applications` | `external_id`, `email`, `full_name`, `status` |
 
-`kind` yalnızca `signup` | `application` | `install` | `manual` olabilir.
+`kind` accepts `signup`, `application`, `install`, or `manual`.
 
-**Hata davranışı ikiye ayrılır:** eksik zorunlu alan `InvalidArgumentException`
-atar (programlama hatasıdır, geliştirmede görülmeli); ağ/HTTP hatası `false`
-döndürür ve loglanır (hub'ın kapalı olması ödeme akışınızı kırmamalı).
+All four **upsert** on `(application_id, external_id)`, so re-sending the same
+event on every state change is safe and never duplicates a record.
 
-`status` ürüne özgü serbest metindir, ama panelin filtreleri ve gelir toplamları
-hub'daki `config/talivio-statuses.php` sözlüğüne bakar. Sözlükte olmayan bir
-yazım kullanırsanız kayıt görünür ama **MRR toplamına girmez** — yeni bir durum
-adı gerekiyorsa önce sözlüğe ekleyin.
+**Error handling is deliberately split in two:** a missing required field throws
+`InvalidArgumentException`, because that is a programming error and should
+surface in development; a network or HTTP failure returns `false` and is logged,
+because the hub being down must never break your payment flow.
 
-## Design language (from v1.12.0, split into primitives + components in v1.17.0)
+`status` is free-form text, but the hub's filters and revenue totals resolve it
+against a known vocabulary. A spelling outside that vocabulary still stores the
+record, but it will **not** count toward MRR — ask for a new status to be added
+before inventing one.
 
-The Talivio visual language — cut corners instead of rounded ones, shadow
-instead of borders, a slowly drifting blue glow, and the standard footer —
-lives **in this package**, so all products share one source. The full contract
-(rules, pitfalls, footer content) is `talivio-ai/docs/tasarim-dili.md`; the code
-here is the implementation of it.
+## Talivio AI
 
-### 1. CSS
+A single client for text generation and embeddings, pointed at the Talivio AI
+gateway. Provider keys live only in the gateway; the product holds nothing but
+the gateway key.
+
+```bash
+php artisan vendor:publish --tag=talivio-ai-config
+```
+
+```dotenv
+TALIVIO_AI_BASE_URL=https://ai-gateway.talivio.com
+TALIVIO_AI_KEY=...
+TALIVIO_AI_DRIVER=http     # use `fake` in the test environment
+```
+
+```php
+use Talivio\Sdk\Ai\TalivioAi;
+
+$result = app(TalivioAi::class)->chat([
+    ['role' => 'user', 'content' => 'Summarise this invoice.'],
+], ['tier' => 'standard']);
+
+if ($result->ok) {
+    echo $result->text;
+}
+```
+
+`chatJson()` requests structured output and `AiResult::json()` decodes it —
+returning `null` on invalid JSON, which the caller must handle. `embed()`
+returns vectors.
+
+Three rules shape this client:
+
+1. **Tier, not model name.** You ask for a quality tier (`standard`, and the
+   other tiers the gateway publishes); the gateway picks the model. Model choice
+   is measured centrally instead of being updated in every product separately.
+
+2. **No method ever throws.** The gateway is a single door, and its failure must
+   not take the product down. Every call returns an `AiResult`; check
+   `$result->ok` and `$result->degraded`.
+
+3. **There is no direct-to-provider path.** If the gateway is unreachable the
+   product continues without AI. `config/talivio-ai.php` → `degradation.mode`
+   decides how: `disable` (the feature quietly turns off — the default),
+   `template` (a pre-written non-AI fallback), or `queue` (retry later). A
+   `throw` mode is deliberately absent.
+
+A circuit breaker stops calling a failing gateway after
+`degradation.breaker_failures` consecutive errors, so an outage does not add
+latency to every request.
+
+### Migrating an existing AI client
+
+If your product already has its own provider client, name it and the package
+wires a **shadow run**: both paths execute, outputs are compared, and
+`migration.primary` decides which result is actually used.
+
+```dotenv
+TALIVIO_AI_LEGACY_CLIENT="App\Services\AI\GeminiClient"
+TALIVIO_AI_PRIMARY=legacy
+TALIVIO_AI_SHADOW=true
+TALIVIO_AI_PROBE_SCHEDULE=true   # run the comparison twice daily
+```
+
+> ⚠️ **A shadow run bills every call twice.** It is temporary: once the
+> comparison is clean, set `primary=gateway`, turn the shadow off, and delete
+> the legacy client. The cost is visible on purpose.
+
+```bash
+php artisan talivio:ai-migration-probe    # collect samples
+php artisan talivio:ai-migration-report   # read the comparison
+```
+
+## Design language
+
+The Talivio visual language — cut corners rather than rounded ones, shadow
+rather than borders, a slowly drifting blue glow, and the standard footer —
+lives in this package so every product shares one source.
+
+### CSS
 
 In the product's `resources/css/app.css`, **after** `@import 'tailwindcss';`:
 
@@ -129,59 +264,41 @@ In the product's `resources/css/app.css`, **after** `@import 'tailwindcss';`:
 @import '../../vendor/talivio/sdk/resources/css/talivio-design.css';
 ```
 
-That gives you `cut` / `cut-sm` / `cut-lg` (+ focus ring), `lift` / `lift-sm`,
-`glow`, `field` and `btn-primary`, with dark-theme counterparts.
+That provides `cut` / `cut-sm` / `cut-lg` (with focus ring), `lift` / `lift-sm`,
+`glow`, `field`, and `btn-primary`, each with a dark-theme counterpart.
 
-⚠️ **If the product already has its own button/form system** (its own
-`.btn-primary`, `.input`, etc.), import `talivio-primitives.css` instead — it
-has everything above **except** `field` and `btn-primary`:
+> ⚠️ **If the product already has its own button and form system**, import
+> `talivio-primitives.css` instead. It contains everything above **except**
+> `field` and `btn-primary`:
+>
+> ```css
+> @import '../../vendor/talivio/sdk/resources/css/talivio-primitives.css';
+> ```
+>
+> The split exists because this package's `.btn-primary` is `w-full`. When it
+> collides with a product's own narrower button rule, every primary button
+> silently stretches to full width.
 
-```css
-@import '../../vendor/talivio/sdk/resources/css/talivio-primitives.css';
-```
-
-This split exists because `talivio-design.css`'s `.btn-primary` is `w-full`;
-a product with its own narrower inline button silently had every primary
-button stretch to full width when the two collided (measured in vatlio).
-
-Usage pattern — **shadow on the outside, clipping on the inside** (the shadow
-of a clipped element is clipped away too):
+Usage pattern — **shadow on the outside, clipping on the inside**, because the
+shadow of a clipped element is clipped away with it:
 
 ```html
 <div class="lift"><div class="cut bg-white p-6 dark:bg-neutral-900">…</div></div>
 ```
 
-The four pitfalls are documented as comments at the top of
-`talivio-design.css` — read them before applying the language to a screen.
+Further pitfalls are documented as comments at the top of `talivio-design.css`;
+read them before applying the language to a new screen.
 
-Tailwind v3 products: `@layer components` and `@apply` work the same; set
+On Tailwind v3, `@layer components` and `@apply` behave the same — set
 `darkMode: ['class', '[data-theme="dark"]']` in `tailwind.config.js`.
 
-Products that theme the brand color should define `--color-brand-50…900` in
-their `@theme` block (see ai.talivio.com); without them the focus ring falls
-back to Talivio blue and `text-brand-300` simply inherits its parent color.
+Products that theme the brand colour should define `--color-brand-50…900` in
+their `@theme` block. Without them the focus ring falls back to Talivio blue and
+`text-brand-300` simply inherits its parent colour.
 
-### 1b. Non-Laravel PHP surfaces (plain PHP, static HTML)
+### Scanning the package views is mandatory
 
-Plain-PHP products (MOSA website, MOSA Internet Gateway pages) consume the same
-CSS files from `vendor/` — the package installs fine without Laravel; nothing
-autoloads unless used. Blade components don't work there, so the package ships
-plain-PHP equivalents that read the SAME `lang/*/footer.php` texts:
-
-```php
-$talivioFooter = ['product' => 'MOSA', 'tagline' => '…', 'locale' => 'tr',
-                  'links' => [['href' => '/x', 'label' => 'Gateway']]];
-require $vendorPath.'/talivio/sdk/resources/plain/footer.php';   // footer
-$talivioLogo = ['class' => 'h-8 w-8', 'onDark' => true];
-require $vendorPath.'/talivio/sdk/resources/plain/logo.php';     // brand SVG
-```
-
-Their Tailwind build must scan `vendor/talivio/sdk/resources/plain/**/*.php`
-(same reason as §2 below). Contract details: `tasarim-dili.md` §7.
-
-### 2. ⚠️ Scanning the package views is MANDATORY
-
-Add this line to `app.css` as well:
+Add this to `app.css` as well:
 
 ```css
 @source '../../vendor/talivio/sdk/resources/views/**/*.blade.php';
@@ -190,16 +307,16 @@ Add this line to `app.css` as well:
 Tailwind only emits classes it has seen in scanned source. Relying on
 `storage/framework/views` is not enough: if a package component has not been
 compiled into that cache at build time, its classes never reach the CSS and the
-component renders half-styled. This shipped to production on 2026-07-26 —
-a white button with white text on ai.talivio.com. Scanning the package source
-directly makes the output independent of the view cache.
+component renders half-styled — a white button with white text is the usual
+symptom. Scanning the package source directly makes the output independent of
+the view cache.
 
-### 3. Footer
+### Footer
 
 ```blade
-<x-talivio::footer product="Talivio AI" :tagline="__('ui.tagline')">
+<x-talivio::footer product="Product Name" :tagline="__('ui.tagline')">
     <x-slot:links>
-        <li><a href="{{ route('chat.index') }}" class="transition hover:text-brand-300">Chat</a></li>
+        <li><a href="{{ route('dashboard') }}" class="transition hover:text-brand-300">Dashboard</a></li>
     </x-slot:links>
 
     {{-- optional: the product's own locale/theme switchers --}}
@@ -209,77 +326,111 @@ directly makes the output independent of the view cache.
 </x-talivio::footer>
 ```
 
-Per-product: `product`, `tagline`, the `links` slot (PRODUCT column — omit it
-and the whole column disappears rather than showing an empty heading), the
-`switches` slot, and the audit badge tokens. Fixed inside the component: the
-LEGAL column, contact details, address, social accounts and the copyright bar.
+Per-product: `product`, `tagline`, the `links` slot (omit it and the whole
+PRODUCT column disappears rather than showing an empty heading), the `switches`
+slot, and the audit badge tokens. Fixed inside the component: the legal column,
+contact details, address, social accounts, and the copyright bar.
 
 **Audit badges only render when the product passes its own token:**
 
 ```blade
-<x-talivio::footer product="Vendio"
-    security-token="ucqkvl5ngrtleizeipqvvfrpneli33qs"
-    a11yproof-token="x4w5r81b5mclalyuvgt7qz8s"
-    privascan-token="qpiwptkg6sycljstc5flxmd6" />
+<x-talivio::footer product="Product Name"
+    security-token="YOUR_TCSR_TOKEN"
+    a11yproof-token="YOUR_A11YPROOF_TOKEN"
+    privascan-token="YOUR_PRIVASCAN_TOKEN" />
 ```
 
-A badge without a token is a security claim that does not resolve, so a product
-that has no token shows no badge. There is deliberately **no newsletter box** in
-the component: a form with no list and no endpoint behind it means never
-reaching the people who subscribe.
+The tokens are public status references, not secrets — each one resolves to a
+live status page. A badge without a token would be a security claim that does
+not resolve, so a product with no token shows no badge.
+
+There is deliberately **no newsletter box** in the component: a form with no
+list and no endpoint behind it means never reaching the people who subscribe.
 
 Footer texts come from the package's own `talivio::footer.*` translations
-(tr / en / et). To reword them:
+(English, Turkish, Estonian). To reword them:
 
 ```bash
 php artisan vendor:publish --tag=talivio-lang
 ```
 
-### 4. Logo
+### Logo
 
 ```blade
-<x-talivio::logo class="h-8 w-8" />              {{-- follows the theme --}}
+<x-talivio::logo class="h-8 w-8" />                 {{-- follows the theme --}}
 <x-talivio::logo class="h-8 w-8" :on-dark="true" /> {{-- always white --}}
 ```
 
-`on-dark` is for surfaces that are dark in **every** theme (the footer strip,
-dark hero bands). Without it the mark follows the theme and comes out black on
-black — exactly what happened in ai.talivio.com's footer.
+Use `on-dark` on surfaces that are dark in **every** theme, such as the footer
+strip or a dark hero band. Without it, the mark follows the theme and comes out
+black on black.
 
-## GDPR account deletion (cascade from the hub)
+### Non-Laravel PHP surfaces
 
-When a user permanently deletes their Talivio account on talivio.com, the hub
-POSTs to this product's `/talivio/account-deleted` endpoint (registered
-automatically by the SDK). The request is signed with HMAC-SHA256 over
-`"{timestamp}.{body}"` using the product's `TALIVIO_WEBHOOK_SECRET` as the
-shared secret, with a ±5 minute timestamp tolerance against replays.
+Plain-PHP sites consume the same CSS from `vendor/`. Blade components do not
+work there, so the package ships plain-PHP equivalents that read the **same**
+`lang/*/footer.php` texts:
 
-Anahtar tanımlı değilse `TALIVIO_INGEST_TOKEN` ile doğrulamaya geri düşülür.
-İki anahtar da denendiği için ürünler sıra bağımsız güncellenebilir; ama ingest
-token'ı hub'da artık hash'li saklandığı ve döndürülebilir olduğu için geri
-dönüş kalıcı bir çözüm değildir — imza anahtarı ayrı olmalı.
+```php
+$talivioFooter = [
+    'product' => 'Product Name',
+    'tagline' => '…',
+    'locale'  => 'en',
+    'links'   => [['href' => '/gateway', 'label' => 'Gateway']],
+];
+require $vendorPath.'/talivio/sdk/resources/plain/footer.php';
 
-Default behavior is to **delete** the local user whose `talivio_id` matches.
-If your product's local accounts own business records that must survive
-(orders, invoices), switch to unlink-only:
-
+$talivioLogo = ['class' => 'h-8 w-8', 'onDark' => true];
+require $vendorPath.'/talivio/sdk/resources/plain/logo.php';
 ```
+
+Their Tailwind build must scan
+`vendor/talivio/sdk/resources/plain/**/*.php` for the same reason as above.
+
+### Mail theme
+
+Registered automatically: every Markdown mailable and notification (password
+resets, verification, receipts) picks up the shared Talivio look, while a
+product's own `resources/views/vendor/mail` overrides still win.
+
+Per-product branding lives in `config/talivio.php` → `mail`:
+
+```dotenv
+TALIVIO_MAIL_LOGO=https://example.com/logo.png   # PNG/JPG — SVG is unreliable in mail clients
+TALIVIO_MAIL_LOGO_HEIGHT=28
+TALIVIO_MAIL_COLOR=#0f172a
+```
+
+## GDPR account deletion
+
+When a user permanently deletes their Talivio account, the hub POSTs to this
+product's `/talivio/account-deleted` endpoint, registered automatically by the
+package. The request is signed with HMAC-SHA256 over `"{timestamp}.{body}"`
+using `TALIVIO_WEBHOOK_SECRET`, with a ±5 minute timestamp tolerance against
+replays. If that key is unset, verification falls back to
+`TALIVIO_INGEST_TOKEN`; both are tried, so products can be updated in any order.
+
+The default behaviour is to **delete** the local user whose `talivio_id`
+matches. If your product's local accounts own business records that must survive
+— orders, invoices — switch to unlink-only:
+
+```dotenv
 TALIVIO_DELETION_BEHAVIOR=unlink
 ```
 
 `unlink` keeps the local account but clears its `talivio_id`, severing the SSO
-link. The endpoint is idempotent — retries and unknown IDs return success.
+link. The endpoint is idempotent: retries and unknown IDs return success.
 
-## Human check — üçüncü partisiz davranışsal bot doğrulaması (v1.20.0)
+## Human check
 
-Kayıt formlarını Google reCAPTCHA / Cloudflare Turnstile gibi üçüncü parti
-servislere bağlamadan emtia botlarına kapatır. İki parça:
+Behavioural bot protection for public forms, without Google reCAPTCHA,
+Cloudflare Turnstile, or any other third party. Two pieces:
 
 ```blade
 <form method="POST" action="{{ route('register') }}">
     @csrf
     ...
-    <x-talivio::human-check />   {{-- form İÇİNE --}}
+    <x-talivio::human-check />   {{-- INSIDE the form --}}
 </form>
 ```
 
@@ -290,46 +441,45 @@ $request->validate([
 ]);
 ```
 
-Nasıl çalışır: bileşen, imzalı + oturuma bağlı + tek kullanımlık bir jeton ve
-görünmez bir tuzak alan (honeypot) basar; satır içi vanilla JS toplayıcı fare
-hareketi (mesafe/yön değişimi), dokunma (touchstart/touchmove — **mobil çözüm
-budur**), ivmeölçer gürültüsü, tuş sayısı/aralık varyansı, odak ve tıklama
-sinyallerini yalnızca **toplam sayaç/varyans özetleri** olarak gönderir
-(koordinat akışı, tuş içeriği, parmak izi yok — GDPR dostu). `Human` kuralı
-jetonu doğrular (HMAC, TTL, oturum eşleşmesi, tekrar-kullanım engeli, asgari
-süre) ve sinyalleri puanlar; `min_score` altı kalan istek reddedilir.
+**How it works.** The component prints a signed, session-bound, single-use token
+and an invisible honeypot field. An inline vanilla-JS collector observes pointer
+movement (distance and direction changes), touch (`touchstart` / `touchmove` —
+this is what makes it work on mobile), accelerometer noise, keystroke count and
+interval variance, focus, and click signals — and submits only **aggregate
+counters and variances**. No coordinate stream, no key content, no
+fingerprinting. The `Human` rule validates the token (HMAC, TTL, session match,
+replay prevention, minimum elapsed time) and scores the signals; a request below
+`min_score` is rejected.
 
-Puanlama pointer-tipine duyarlıdır: dokunmatik cihazda fare sinyali beklenmez,
-klavye-only gezinen erişilebilirlik kullanıcısı yalnız tuş/odak sinyaliyle
-geçebilir. `navigator.webdriver` bayrağı ve payload'sız (JS'siz) istek doğrudan
-reddedilir.
+Scoring is pointer-type aware: no mouse signal is expected on a touch device,
+and a keyboard-only accessibility user can pass on key and focus signals alone.
+A `navigator.webdriver` flag or a payload-free (JavaScript-disabled) request is
+rejected outright.
 
-JS'i kapalı kullanıcı bileşenin `<noscript>` uyarısını **formu doldurmadan
-önce** görür (v1.21.3). Öncesinde bu sessiz bir çıkmazdı: formu doldurup
-gönderiyor, "insan olduğunuzu doğrulayamadık — sayfayı yenileyin" alıyor,
-yenilemek JS'i açmadığı için aynı yere düşüyordu. Hem uyarı hem hata mesajı
-artık destek kanalına yönlendiriyor; işlemin elle tamamlanabilmesi bilinçli
-bir kaçış valfi (erişilebilirlik + kilitlenme önleme).
+A user with JavaScript disabled sees the component's `<noscript>` warning
+**before** filling the form, and both the warning and the error message point to
+the support channel so the action can be completed manually — a deliberate
+escape hatch for accessibility and against lock-out.
 
-Jeton tek kullanımlıktır ama **yalnızca kayıt gerçekten tamamlanınca** yanar:
-formun başka bir alanı hatalıysa (boş alan, şifre uyuşmazlığı, kullanılmış
-e-posta) aynı jetonla tekrar denenebilir. Aksi hâlde koruma, botları değil
-hata yapan gerçek kullanıcıları kilitlerdi — bu hata tarayıcı testinde
-yakalandı ve `Human` kuralı tüketimi validator'ın `after` aşamasına taşıdı.
+The token is single-use but **only burns once the submission actually
+succeeds**. If another field fails validation — a blank field, a password
+mismatch, an email already in use — the same token can be retried. Otherwise the
+protection would lock out real users who make a typo rather than bots.
 
-Ayarlar (`config/talivio.php` → `human`): `TALIVIO_HUMAN_ENABLED`,
-`TALIVIO_HUMAN_MIN_SECONDS` (varsayılan 3 sn), `TALIVIO_HUMAN_MIN_SCORE`
-(varsayılan 3), `TALIVIO_HUMAN_TOKEN_TTL`, `TALIVIO_HUMAN_LOG_ONLY`.
+Settings (`config/talivio.php` → `human`): `TALIVIO_HUMAN_ENABLED`,
+`TALIVIO_HUMAN_MIN_SECONDS` (default 3), `TALIVIO_HUMAN_MIN_SCORE` (default 3),
+`TALIVIO_HUMAN_TOKEN_TTL`, `TALIVIO_HUMAN_LOG_ONLY`.
 
-Canlı bir üründe ilk açılışta `TALIVIO_HUMAN_LOG_ONLY=true` ile gölge modda
-başlatıp log'lardaki (`talivio.human: ...`) skor dağılımını izleyin, sonra
-enforce'a geçin. Test koşularında kural kendiliğinden atlanır
-(`enforce_in_tests` ile açılır) — ürünlerin mevcut kayıt testleri kırılmaz.
+**Roll it out in shadow mode first.** Set `TALIVIO_HUMAN_LOG_ONLY=true` on a
+live product, watch the score distribution in the logs (`talivio.human: …`),
+then switch to enforcing. The rule is skipped automatically during test runs
+(`enforce_in_tests` turns it back on), so existing registration tests keep
+passing.
 
 ### Livewire / Volt
 
-Livewire formu klasik POST etmez; sunucuya bileşenin property'leri gider, DOM'daki
-gizli alanın değeri **gitmez**. Bu yüzden Livewire'da üç şey gerekir:
+A Livewire form does not POST classically — component properties reach the
+server, but the value of a hidden DOM field does not. Three things are needed:
 
 ```blade
 <form wire:submit="register">
@@ -340,28 +490,30 @@ gizli alanın değeri **gitmez**. Bu yüzden Livewire'da üç şey gerekir:
 
 ```php
 public string $talivio_human = '';
-public string $tl_website = '';   // tuzak alan
+public string $tl_website = '';   // honeypot
 
 $this->validate([
-    // Honeypot ARGÜMANLA verilir: Livewire isteğinde `tl_website` düz bir
-    // girdi olarak gelmez, kural onu istekten okuyamaz.
+    // The honeypot is passed as an ARGUMENT: in a Livewire request `tl_website`
+    // does not arrive as a plain input, so the rule cannot read it off the request.
     'talivio_human' => [new \Talivio\Sdk\Human\Rules\Human($this->tl_website)],
 ]);
 ```
 
-⚠️ `wire:model.live` KULLANMAYIN — toplayıcı değeri etkileşim boyunca tazelediği
-için her tazeleme bir ağ isteğine dönerdi. Ertelenmiş (varsayılan) `wire:model`
-değeri bir sonraki eylemle birlikte gönderir; istenen davranış budur.
+> ⚠️ **Do not use `wire:model.live`.** The collector refreshes its value
+> throughout the interaction, so every refresh would become a network request.
+> Deferred (default) `wire:model` sends the value with the next action, which is
+> the behaviour you want.
 
-### Inertia / Vue / React (kendi formunu JS'te kuran ürünler)
+### Inertia / Vue / React
 
-Blade bileşeni yerine ESM modülü kullanılır — ikisi de AYNI toplayıcı çekirdeğini
-çalıştırır, davranış birebir aynıdır:
+Products that build their own form in JavaScript use the ESM module instead of
+the Blade component. Both run the **same** collector core, so behaviour is
+identical:
 
 ```js
 import { createHumanCheck } from '../../vendor/talivio/sdk/resources/js/talivio-human.js';
 
-const human = createHumanCheck();   // jetonu GET /talivio/human/token'dan alır
+const human = createHumanCheck();   // fetches the token from GET /talivio/human/token
 
 const submit = () => {
     form.talivio_human = human.payload();
@@ -369,13 +521,29 @@ const submit = () => {
 };
 ```
 
-Sunucu tarafı klasik formla aynıdır (`'talivio_human' => [new Human]`); honeypot
-alanı normal bir istek girdisi olarak gittiği için argüman gerekmez. Tuzak alanı
-formun state'ine eklemeyi unutmayın (`tl_website: ''`).
+The server side is unchanged (`'talivio_human' => [new Human]`); the honeypot
+arrives as an ordinary request input, so no argument is needed. Remember to add
+the honeypot field to the form state (`tl_website: ''`).
 
-Tehdit modeli dürüstlüğü: bu katman formu script'le dolduran emtia botlarını
-ve başsız tarayıcıları durdurur; siteye özel yazılmış, insan hareketi taklit
-eden hedefli bir saldırganı durdurmaz — o katman için throttle + e-posta
-doğrulama zaten var. Native mobil uygulamalar web bileşenini kullanamaz;
-`HumanCheck::verify()` taşıma-bağımsızdır, aynı payload şeklini üreten bir
-istemci API üzerinden de doğrulanabilir.
+### Threat model
+
+This layer stops commodity bots that script-fill forms, and headless browsers.
+It does **not** stop a targeted attacker who writes site-specific code to mimic
+human movement — throttling and email verification are the layers for that.
+Native mobile apps cannot use the web component; `HumanCheck::verify()` is
+transport-independent, so a client producing the same payload shape can be
+verified over an API.
+
+## Security
+
+No credentials are stored in this repository — see [SECURITY.md](SECURITY.md)
+for the vulnerability reporting process.
+
+## Licence
+
+Copyright © 2026 Talivio Technology OÜ. All rights reserved.
+
+This repository is published for transparency and security review. It is **not**
+open source, and reading it grants no right to use it outside Talivio. See
+[LICENSE](LICENSE) for the exact terms, or contact info@talivio.com for
+licensing enquiries.

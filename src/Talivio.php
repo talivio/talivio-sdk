@@ -17,5 +17,5 @@ class Talivio
      * türetilmeli), bu yüzden sürüm burada elle tutulur — etiket atarken
      * güncellenmesi gerekir.
      */
-    public const VERSION = '1.21.3';
+    public const VERSION = '1.23.2';
 }

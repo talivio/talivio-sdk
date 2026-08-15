@@ -1,0 +1,39 @@
+Copyright (c) 2026 Talivio Technology OÜ
+Ahtri tn 12, Kesklinna linnaosa, Tallinn, Harju maakond, 15551, Estonia
+
+All rights reserved.
+
+This source code is made publicly readable for transparency, security review
+and integration reference. Publication does NOT place it in the public domain
+and does NOT grant an open-source licence.
+
+PERMITTED, without further permission:
+
+  1. Viewing, reading and reviewing this source code.
+  2. Quoting short excerpts for the purpose of security research, academic
+     study, journalism, or reporting a vulnerability to Talivio Technology OÜ.
+  3. Installing and using this package, unmodified, in software operated by or
+     on behalf of Talivio Technology OÜ.
+
+NOT PERMITTED without prior written permission from Talivio Technology OÜ:
+
+  1. Use, in whole or in part, in any product, service or codebase not operated
+     by or on behalf of Talivio Technology OÜ.
+  2. Copying, redistribution, sublicensing, sale, or publication of this code or
+     any derivative work.
+  3. Modification for any purpose other than a contribution submitted back to
+     Talivio Technology OÜ.
+
+The names "Talivio" and "Talivio Technology", the Talivio logo, and the product
+names referenced in this repository are trademarks of Talivio Technology OÜ.
+This licence grants no trademark rights.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Licensing enquiries: info@talivio.com

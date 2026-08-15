@@ -103,5 +103,15 @@ return [
 
         'primary' => env('TALIVIO_AI_PRIMARY', 'legacy'),
         'shadow' => (bool) env('TALIVIO_AI_SHADOW', false),
+
+        /*
+         * Ölçüm koşusunu SDK kendisi zamanlasın mı (günde iki kez)?
+         *
+         * Provider bu anahtarı okuyordu ama yayınlanan config'te yazmıyordu —
+         * yani ürün, varsayılanı değiştirebileceğini dosyaya bakarak
+         * göremiyordu. Varsayılan KAPALI: `shadow` gibi bu da ikinci bir
+         * fatura üretir ve açmak bilinçli bir karardır.
+         */
+        'probe_schedule' => (bool) env('TALIVIO_AI_PROBE_SCHEDULE', false),
     ],
 ];

@@ -1,0 +1,31 @@
+version: 2
+
+updates:
+  # Composer dependencies (illuminate/*, laravel/socialite).
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Laravel's first-party packages move together; one PR per week instead
+      # of one per component keeps the queue readable.
+      laravel:
+        patterns:
+          - "illuminate/*"
+          - "laravel/*"
+
+  # Keep any GitHub Actions used by this repository current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "ci"
