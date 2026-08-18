@@ -391,15 +391,32 @@ Their Tailwind build must scan
 
 Registered automatically: every Markdown mailable and notification (password
 resets, verification, receipts) picks up the shared Talivio look, while a
-product's own `resources/views/vendor/mail` overrides still win.
+product's own `resources/views/vendor/mail` overrides still win — publishing
+Laravel's stock mail views therefore *disables* this theme, so delete them if
+you want the shared look back.
 
-Per-product branding lives in `config/talivio.php` → `mail`:
+Every product sends the same shaped mail: Talivio logo on the left of the
+header, **the product name on the right**, the body, then a legal footer row
+carrying the company identity and the Talivio mark. Only `TALIVIO_MAIL_PRODUCT`
+is worth setting per product; everything else has a working default.
 
 ```dotenv
-TALIVIO_MAIL_LOGO=https://example.com/logo.png   # PNG/JPG — SVG is unreliable in mail clients
-TALIVIO_MAIL_LOGO_HEIGHT=28
+TALIVIO_MAIL_PRODUCT=Contentio                     # right-hand header cell + logo alt text
+TALIVIO_MAIL_PRODUCT_URL=https://contentio.talivio.com
+TALIVIO_MAIL_SUPPORT=contentio@talivio.com         # the mailto: behind the header, and the reply-to a human reads
+
+# Optional overrides
+TALIVIO_MAIL_LOGO=https://example.com/logo.png     # PNG/JPG — SVG is unreliable in mail clients
+TALIVIO_MAIL_LOGO_HEIGHT=40
 TALIVIO_MAIL_COLOR=#0f172a
+TALIVIO_MAIL_HEADER_RIGHT=Support                  # talivio.com's corporate mail only
+TALIVIO_MAIL_LEGAL_COMPANY="Talivio Technology OÜ"
+TALIVIO_MAIL_LEGAL_ADDRESS="Ahtri tn 12, Kesklinna linnaosa, 15551 Tallinn, Estonia"
+TALIVIO_MAIL_LEGAL_VAT=EE102744206
 ```
+
+The legal footer is not decoration: in the EU the sender's legal identity and
+address must appear in commercial e-mail.
 
 ## GDPR account deletion
 

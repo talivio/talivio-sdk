@@ -8,7 +8,8 @@
 <meta name="supported-color-schemes" content="light">
 <style>
 @media only screen and (max-width: 600px) {
-.inner-body {
+.inner-body,
+.header-inner {
 width: 100% !important;
 }
 
@@ -20,6 +21,33 @@ width: 100% !important;
 @media only screen and (max-width: 500px) {
 .button {
 width: 100% !important;
+}
+
+/* ⚠️ DAR EKRANDA BAŞLIK TAŞIYORDU. Logo + support adresi 570px'e göre
+   kurulmuş; 380px'lik bir telefonda adres sağ kenardan kırpılıyordu
+   (2026-08-16, mobil önizlemede görüldü). Küçültmek, kırpmaktan iyi. */
+.header-inner {
+padding-left: 12px !important;
+padding-right: 12px !important;
+}
+
+.header-logo {
+height: 32px !important;
+}
+
+/* Teklif tablosunun yan boşlukları dar ekranda içeriği sıkıştırıyor. */
+.offer-label,
+.offer-amount,
+.offer-head-label,
+.offer-head-amount,
+.offer-total-label,
+.offer-total-amount,
+.offer-subtotal-label,
+.offer-subtotal-amount,
+.offer-discount-label,
+.offer-discount-amount {
+padding-left: 12px !important;
+padding-right: 12px !important;
 }
 }
 </style>
@@ -44,14 +72,23 @@ width: 100% !important;
 
 {!! $subcopy ?? '' !!}
 
-{{-- Talivio marka satırı — beyaz alanın içinde, alt kenarda --}}
-<table class="brand-row" width="100%" cellpadding="0" cellspacing="0" role="presentation">
+{{-- Alt künye: SOLDA yasal bilgi, SAĞDA yalnız Talivio ikonu.
+
+     ⚠️ İKİ SATIR KALDIRILDI ("Bu e-posta … tarafından gönderildi",
+     "bir Talivio ürünü"): ikisi de mailin zaten söylediğini tekrar
+     ediyordu — üstte logo var, altta şirket künyesi var. Gövdeyi
+     uzatan ama hiçbir soruya cevap vermeyen satırlardı.
+
+     ⚠️ YASAL KÜNYE ŞART: AB'de ticari e-posta gönderen tüzel kişinin adı,
+     adresi ve vergi kimliği mailde görünmek zorunda. Şirketin Estonya'da
+     kayıtlı olması bunu isteğe bağlı yapmıyor. --}}
+<table class="legal-row" width="100%" cellpadding="0" cellspacing="0" role="presentation">
 <tr>
-<td align="left" class="brand-row-cell">
-Bu e-posta {{ config('app.name') }} tarafından gönderildi.
+<td align="left" class="legal-cell">
+{{ config('talivio.mail.legal.company') }} · {{ config('talivio.mail.legal.address') }} · VAT {{ config('talivio.mail.legal.vat_id') }}
 </td>
-<td align="right" class="brand-row-cell">
-<a href="https://talivio.com" class="footer-tagline">a <img src="https://talivio.com/assets/images/icon-logo.png" alt="" width="16" height="16" class="footer-tagline-icon"> <span class="footer-talivio">Talivio</span> product</a>
+<td align="right" class="legal-icon-cell">
+<a href="https://talivio.com"><img src="{{ config('talivio.mail.brand_logo_icon') }}" alt="Talivio" width="32" height="32" class="legal-icon"></a>
 </td>
 </tr>
 </table>

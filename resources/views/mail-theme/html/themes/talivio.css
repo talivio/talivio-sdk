@@ -26,8 +26,27 @@ p,
 ul,
 ol,
 blockquote {
-    line-height: 1.6;
+    line-height: 1.65;
     text-align: left;
+}
+
+/*
+ * ⚠️ LİSTE, ARKA ARKAYA PARAGRAF DEĞİL. Paket içeriğini `· madde` diye
+ * ayrı paragraflar hâlinde basmak her maddeye tam paragraf boşluğu
+ * veriyordu; üç maddelik bir liste yarım ekran kaplıyor ve bir arada
+ * okunmuyordu. Gerçek liste, maddeleri birbirine bağlar.
+ */
+ul,
+ol {
+    color: #334155;
+    font-size: 16px;
+    margin-top: 0;
+    margin-bottom: 18px;
+    padding-left: 20px;
+}
+
+li {
+    margin-bottom: 6px;
 }
 
 a {
@@ -42,9 +61,14 @@ a img {
 
 h1 {
     color: #0f172a;
-    font-size: 19px;
+    font-size: 20px;
     font-weight: 700;
     margin-top: 0;
+    /* Selamlama ile ilk cümle arasındaki boşluk, paragraf arasından
+       BÜYÜK olmalı: yoksa "Merhaba Adem Akın," metnin bir parçası gibi
+       okunuyor, hitap gibi değil. */
+    margin-bottom: 22px;
+    line-height: 1.35;
     text-align: left;
 }
 
@@ -66,10 +90,26 @@ h3 {
 
 p {
     color: #334155;
-    font-size: 15px;
-    line-height: 1.6;
+    font-size: 16px;
+    /* 1.6 → 1.65: e-posta gövdesi ekranda okunuyor, kitapta değil;
+       satır arası biraz açıldığında uzun cümleler takip edilebilir
+       kalıyor. */
+    line-height: 1.65;
     margin-top: 0;
+    /* ⚠️ ALT BOŞLUK AÇIKÇA YAZILIR. Yazılmadığında tarayıcı/istemci
+       varsayılanına (1em) düşüyordu ve her istemci farklı bir ritim
+       üretiyordu — aynı mail Gmail'de sıkışık, Outlook'ta dağınık
+       görünüyordu. */
+    margin-bottom: 18px;
     text-align: left;
+}
+
+/* Kalın metin gövdeden AYRIŞMALI. Gövde #334155 (sönük gri-mavi);
+   aynı renkte bir <strong> yalnızca kalınlaşıyor, vurgulanmıyordu. */
+strong,
+b {
+    color: #0f172a;
+    font-weight: 600;
 }
 
 p.sub {
@@ -105,7 +145,35 @@ img {
 
 .header {
     padding: 28px 0;
-    text-align: center;
+    /* İki uçlu yerleşim: logo solda, destek adresi sağda (bkz. header.blade). */
+    text-align: left;
+}
+
+.header-inner {
+    /* İçerik kartıyla aynı ölçü — dar ekranda %100'e düşer (aşağıdaki
+       @media kuralı .inner-body ile birlikte bunu da kapsıyor). */
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    margin: 0 auto;
+    width: 570px;
+}
+
+.header-brand-cell {
+    vertical-align: middle;
+}
+
+.header-support-cell {
+    vertical-align: middle;
+}
+
+a.header-support {
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-decoration: none;
+    white-space: nowrap;
 }
 
 .header a {
@@ -124,43 +192,56 @@ img {
 
 .header-logo {
     border: none;
-    max-height: 32px;
+    /* 32px → 44px: logo mailin kimlik taşıyan tek görseli; küçükken
+       gövde metninin yanında kaybolup gidiyordu. */
+    max-height: 44px;
     vertical-align: middle;
 }
 
-/* Brand row — inside the white content area, bottom edge: sender name on
-   the left, "a Talivio product" tagline on the right. */
+/* Alt künye — beyaz alanın içinde, alt kenarda: solda yasal bilgi,
+   sağda yalnız Talivio simgesi.
 
-.brand-row {
+   ⚠️ "Bu e-posta … tarafından gönderildi" ve "bir Talivio ürünü"
+   satırları KALDIRILDI: ikisi de mailin zaten söylediğini tekrar
+   ediyordu (üstte logo, altta şirket künyesi). */
+
+.legal-row {
     border-top: 1px solid #e2e8f0;
     margin-top: 25px;
     padding-top: 16px;
 }
 
-.brand-row-cell {
+.legal-cell {
+    /* Sönük ama OKUNUR: künye yasal bir zorunluluk, dekorasyon değil.
+       İlk deneme #cbd5e1'di ve beyaz üzerinde neredeyse görünmüyordu. */
     color: #94a3b8;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.5;
     padding-top: 16px;
     vertical-align: middle;
 }
 
-a.footer-tagline {
-    color: #94a3b8;
-    font-size: 12px;
-    text-decoration: none;
-    white-space: nowrap;
+.legal-icon-cell {
+    padding-top: 16px;
+    vertical-align: middle;
+    width: 40px;
 }
 
-.footer-tagline-icon {
+/*
+ * ⚠️ 20px'TE BU İŞARET OKUNMUYORDU. Marka işaretinin içindeki ince beyaz
+ * boşluklar o boyutta kapanıp lekeye dönüşüyor; iş sahibi "simge
+ * görünmüyor" diye bildirdi ve haklıydı — eksik olan dosya değil, boyuttu.
+ *
+ * ⚠️ KAYNAK DOSYA DA DEĞİŞTİ: `icon.png` 2400×2400 (14,5 KB) ve 20px'e
+ * indirilirken istemcinin yeniden örneklemesine kalıyordu. `icon-mail-64`
+ * tam da bu kullanım için üretildi: 64px kaynak, 32px gösterim (2×),
+ * 1,4 KB.
+ */
+.legal-icon {
+    border: none;
     display: inline-block;
-    height: 16px;
-    vertical-align: -3px;
-    width: 16px;
-}
-
-.footer-talivio {
-    color: #0f172a;
-    font-weight: 700;
+    height: 32px;
+    width: 32px;
 }
 
 /* Logo */
@@ -302,15 +383,20 @@ a.footer-tagline {
     overflow: hidden;
     text-decoration: none;
     font-weight: 600;
+    /* Parmakla dokunulabilir olmalı: eski hâli (8px dikey dolgu, miras
+       alınan yazı boyutu) telefonda 30 piksel yüksekliğinde bir şerit
+       çıkarıyordu. */
+    font-size: 16px;
+    line-height: 1.2;
 }
 
 .button-blue,
 .button-primary {
     background-color: #3087ce;
-    border-bottom: 8px solid #3087ce;
-    border-left: 18px solid #3087ce;
-    border-right: 18px solid #3087ce;
-    border-top: 8px solid #3087ce;
+    border-bottom: 13px solid #3087ce;
+    border-left: 26px solid #3087ce;
+    border-right: 26px solid #3087ce;
+    border-top: 13px solid #3087ce;
 }
 
 .button-green,
@@ -380,4 +466,155 @@ a.footer-tagline {
     .button {
         width: 100% !important;
     }
+}
+
+/* ── Teklif tablosu ──────────────────────────────────────────────────
+   Para konuşan bir mailde sayılar kendi sütununda, SAĞA DAYALI ve toplam
+   en altta olmak zorunda. Önceki hâl madde işaretli bir listeydi
+   ("Web barındırma — 45,00 EUR"): tutarlar hizasız, ara toplam/indirim/
+   toplam ayrımı yok, göz nereye bakacağını bilmiyordu.
+
+   ⚠️ `<table>` — flex ve grid Outlook'ta yok sayılıyor. E-postada hizalama
+   yalnızca tabloyla güvenilir. */
+
+.offer {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    /* border-collapse KULLANILMIYOR: köşe yuvarlaklığını götürüyor ve
+       bazı istemcilerde çerçeveyi tamamen düşürüyor. */
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+.offer-head-label,
+.offer-head-amount {
+    background-color: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    padding: 10px 18px;
+    text-transform: uppercase;
+}
+
+.offer-head-label { text-align: left; }
+.offer-head-amount { text-align: right; white-space: nowrap; }
+
+.offer-label {
+    border-bottom: 1px solid #f1f5f9;
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 14px 18px;
+    text-align: left;
+}
+
+/* Kalemin altındaki açıklama: aynı satırın parçası ama sesi kısık —
+   kalemin niteliği, kendisi değil. */
+.offer-note {
+    color: #64748b;
+    display: block;
+    font-size: 13px;
+    font-weight: 400;
+    margin-top: 3px;
+}
+
+/* Pakete DAHİL hizmet — ana kalemin altında, kendi satırında.
+
+   ⚠️ AÇIKLAMADAN GÜÇLÜ, KALEMDEN ZAYIF. Bu bir hizmet adı (e-posta
+   barındırma), dolayısıyla nitelik açıklamasından ayrışmalı; ama kendi
+   tutarı olmadığı için ana kalemle aynı ağırlıkta da olamaz — olsaydı
+   müşteri yanında bir rakam arardı.
+
+   ⚠️ "+" İŞARETİ İLİŞKİYİ SÖYLER: alt satırın ana kalemin İÇİNDE olduğunu
+   çizgi ya da girinti değil, o işaret anlatıyor (girinti dar ekranda
+   kayboluyor). */
+.offer-sub {
+    color: #334155;
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 6px;
+    padding-left: 14px;
+    text-indent: -14px;
+}
+
+.offer-amount {
+    border-bottom: 1px solid #f1f5f9;
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 14px 18px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.offer-subtotal-label,
+.offer-discount-label {
+    color: #475569;
+    font-size: 14px;
+    padding: 8px 18px;
+    text-align: left;
+}
+
+.offer-subtotal-amount,
+.offer-discount-amount {
+    color: #475569;
+    font-size: 14px;
+    padding: 8px 18px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.offer-subtotal-label,
+.offer-subtotal-amount { padding-top: 14px; }
+
+/* İndirim KAZANÇTIR, yeşil. Gri bir eksi rakam, indirim gibi değil hata
+   gibi okunuyordu. */
+.offer-discount-label,
+.offer-discount-amount { color: #059669; font-weight: 600; }
+
+/* Kod, indirim satırının içinde bir rozet: "bu indirim nereden geliyor"
+   sorusunun cevabı satırın kendisinde dursun. */
+.offer-code {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 5px;
+    color: #047857;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    white-space: nowrap;
+}
+
+.offer-total-label {
+    border-top: 2px solid #e2e8f0;
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 14px 18px;
+    text-align: left;
+}
+
+/* Mailin en önemli sayısı: müşterinin ödeyeceği tutar. Diğer her şeyden
+   büyük ve marka renginde. */
+.offer-total-amount {
+    border-top: 2px solid #e2e8f0;
+    color: #3087ce;
+    font-size: 21px;
+    font-weight: 700;
+    padding: 14px 18px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.offer-code-hint {
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 18px;
+    margin-top: 0;
 }
