@@ -85,10 +85,11 @@ padding-right: 12px !important;
 <table class="legal-row" width="100%" cellpadding="0" cellspacing="0" role="presentation">
 <tr>
 <td align="left" class="legal-cell">
-{{ config('talivio.mail.legal.company') }} · {{ config('talivio.mail.legal.address') }} · VAT {{ config('talivio.mail.legal.vat_id') }}
+@php($legal = \Talivio\Sdk\Mail\MailBrand::legal())
+{{ $legal['company'] }} · {{ $legal['address'] }} · VAT {{ $legal['vat_id'] }}
 </td>
 <td align="right" class="legal-icon-cell">
-<a href="https://talivio.com"><img src="{{ config('talivio.mail.brand_logo_icon') }}" alt="Talivio" width="32" height="32" class="legal-icon"></a>
+<a href="https://talivio.com"><img src="{{ \Talivio\Sdk\Mail\MailBrand::logoIcon() }}" alt="Talivio" width="32" height="32" class="legal-icon"></a>
 </td>
 </tr>
 </table>

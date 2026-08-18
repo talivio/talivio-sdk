@@ -400,6 +400,11 @@ header, **the product name on the right**, the body, then a legal footer row
 carrying the company identity and the Talivio mark. Only `TALIVIO_MAIL_PRODUCT`
 is worth setting per product; everything else has a working default.
 
+Values resolve as **published config → env → package default**
+(`Talivio\Sdk\Mail\MailBrand`), so a product that published an older
+`config/talivio.php` gets the full look from `composer update` alone — no
+config edit needed.
+
 ```dotenv
 TALIVIO_MAIL_PRODUCT=Contentio                     # right-hand header cell + logo alt text
 TALIVIO_MAIL_PRODUCT_URL=https://contentio.talivio.com

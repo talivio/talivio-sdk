@@ -9,8 +9,8 @@
 <x-mail::layout>
 {{-- Header --}}
 <x-slot:header>
-<x-mail::header :url="config('talivio.mail.product_url') ?: config('app.url')">
-{{ config('talivio.mail.product_name') ?: config('app.name') }}
+<x-mail::header :url="\Talivio\Sdk\Mail\MailBrand::productUrl()">
+{{ \Talivio\Sdk\Mail\MailBrand::productName() }}
 </x-mail::header>
 </x-slot:header>
 
@@ -29,7 +29,7 @@
 {{-- Footer --}}
 <x-slot:footer>
 <x-mail::footer>
-© {{ date('Y') }} {{ config('talivio.mail.legal.company') }}. {{ __('All rights reserved.') }}
+© {{ date('Y') }} {{ \Talivio\Sdk\Mail\MailBrand::legal()['company'] }}. {{ __('All rights reserved.') }}
 </x-mail::footer>
 </x-slot:footer>
 </x-mail::layout>

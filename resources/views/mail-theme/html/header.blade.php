@@ -24,17 +24,17 @@
 <tr>
 <td align="left" class="header-brand-cell">
 <a href="{{ $url }}" style="display: inline-block;">
-@if($logo = config('talivio.mail.brand_logo'))
-<img src="{{ $logo }}" height="{{ config('talivio.mail.brand_logo_height', 40) }}" alt="{{ $slot }}" class="header-logo">
+@if($logo = \Talivio\Sdk\Mail\MailBrand::logo())
+<img src="{{ $logo }}" height="{{ \Talivio\Sdk\Mail\MailBrand::logoHeight() }}" alt="{{ $slot }}" class="header-logo">
 @else
-<span class="header-product" style="color: {{ config('talivio.mail.brand_color', '#0f172a') }};">{{ $slot }}</span>
+<span class="header-product" style="color: {{ \Talivio\Sdk\Mail\MailBrand::color() }};">{{ $slot }}</span>
 @endif
 </a>
 </td>
 <td align="right" class="header-support-cell">
-@php($headerRight = config('talivio.mail.header_right') ?: trim($slot))
+@php($headerRight = \Talivio\Sdk\Mail\MailBrand::headerRight())
 @if($headerRight !== '')
-<a href="mailto:{{ config('talivio.mail.support_email') }}" class="header-support">{{ $headerRight }}</a>
+<a href="mailto:{{ \Talivio\Sdk\Mail\MailBrand::supportEmail() }}" class="header-support">{{ $headerRight }}</a>
 @endif
 </td>
 </tr>
