@@ -1,0 +1,1 @@
+- [Design language lives in the SDK](design-language-lives-in-sdk.md) — the shared visual language ships from talivio/sdk v1.12.0; never copy it into a product.
