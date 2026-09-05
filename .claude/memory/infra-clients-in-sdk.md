@@ -58,3 +58,38 @@ type-hint the SDK contract (or call `Client::fromConfig()` for a null-able
 "is it configured?" check); bind `Infra\Testing\Fake*` in its tests. Add
 new vendor logic here, tag, bump the product — never copy a client back
 into a product. Package tests: `composer test` (Testbench, all HTTP faked).
+
+## Mail: Mailio is the owner-of-record (2026-09-05, Eren's decision)
+
+Every mail package Talivio sells in ANY product is a Mailio package, so the
+`Mail` contract grew to the full mailcow admin surface in v1.26.0 and Mailio
+deleted its own 490-line `MailcowService` (v1.26.2 in Mailio). What stayed in
+Mailio is what is NOT a mail-host concern: `MailDomainVerifier` (proves domain
+ownership against public DNS — the host is TOLD the answer via
+`setDomainActive`, it does not compute it) and `MailDnsGuide` (the customer's
+record table; the SDK returns data, the prose and its translations belong to
+the product).
+
+- **`MailOwner` stamps ownership into mailcow's own description field**
+  (`Acme Ltd [mailio:company-7]`). One instance serves every product, so
+  "whose domain is this?" must be answerable from the mail server itself.
+  A description with no tag parses to null = **unknown/legacy, NOT unowned**.
+- **`HostRefusedException` vs plain RuntimeException**: a refusal carries a
+  reason the customer should read and retrying never helps; anything else
+  means the host was unreachable. Products must branch on this — Mailio's
+  `callMailcow()` is the reference.
+- **Mailcow env name differs from Mailio's old one**: the SDK reads
+  `MAILCOW_URL` = the INSTANCE ROOT (`https://mail.talivio.com`) and appends
+  `/api/v1/...` itself. Mailio's dead block used `MAILCOW_API_URL` = the API
+  root. Same key name `MAILCOW_API_KEY`.
+
+⚠️ **The shared instance is NOT empty and no product owns it.** Measured
+2026-09-05 via Contentio's credentials: **25 domains, 118 mailboxes**, all
+created by hand (description = the domain name), all `active=1`, and **zero**
+carry an owner tag. Contentio's own tables say 0 provisioned domains and 0
+mailboxes; Mailio's say 0/0/1-company. So real customer mail is running on an
+instance that no product's database knows about. Consequences: (a) the
+`deleteDomain`/`setDomainActive` powers now on the shared contract are
+genuinely dangerous here, (b) before any product is wired to manage this
+instance those 25 domains need attributing — only Eren knows who owns them,
+(c) a backfill of `MailOwner` tags is the natural first step.
