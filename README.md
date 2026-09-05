@@ -13,6 +13,9 @@ the Talivio platform:
   so every product stays visually consistent from one source.
 - **Human check** — behavioural bot protection for public forms, with no
   third-party service.
+- **Infrastructure clients** — Namecheap/Openprovider, Cloudflare, Ploi and
+  mailcow behind four contracts, so a product provisions a customer domain
+  without owning a single vendor integration.
 
 Every feature is optional. Install the package, use the parts you need; nothing
 autoloads unless you touch it.
@@ -555,6 +558,76 @@ human movement — throttling and email verification are the layers for that.
 Native mobile apps cannot use the web component; `HumanCheck::verify()` is
 transport-independent, so a client producing the same payload shape can be
 verified over an API.
+
+## Infrastructure clients (domains, DNS, hosting, mail)
+
+`Talivio\Sdk\Infra` is the one place the platform talks to its vendors. Every
+Talivio product runs on the same server and uses the same four accounts, so
+the clients — and the IP-allowlist lessons they encode — live here instead of
+being copied into each product.
+
+| Contract | Driver | Purpose |
+|---|---|---|
+| `Infra\Contracts\Registrar` | Namecheap (default), Openprovider | availability + quote, register, renew, transfer in, nameservers, transfer lock |
+| `Infra\Contracts\Dns` | Cloudflare | zone per customer domain, apex/www records, arbitrary record upserts, zone lookup by suffix |
+| `Infra\Contracts\Host` | Ploi | attach a domain to the product's site, request/poll its certificate; create/delete whole sites for ops |
+| `Infra\Contracts\Mail` | mailcow | domains, mailboxes, forwarding aliases, the MX/SPF/DKIM records a domain needs |
+
+Type-hint the contract and the package binds the configured driver. Missing
+credentials fail at resolution with a `NotConfiguredException` naming the
+environment variable; a product that wants to *show* "not configured" instead
+calls the concrete class's `fromConfig()`, which returns `null`.
+
+```php
+use Talivio\Sdk\Infra\Contracts\{Registrar, Dns, Host};
+
+public function __construct(private Registrar $registrar, private Dns $dns, private Host $host) {}
+
+$zone = $this->dns->ensureZone($domain);                       // ['id', 'nameservers', 'active']
+$id   = $this->registrar->register($domain, $registrant, $zone['nameservers']);
+$this->dns->ensureRecords($zone['id'], $domain, $this->host->serverIp());
+$this->host->attachDomain($domain);
+$this->host->requestCertificate($domain, ["www.{$domain}"], $webhookUrl, validateViaDns: true);
+```
+
+```dotenv
+DOMAIN_REGISTRAR=namecheap          # or openprovider
+DOMAIN_MARGIN_PERCENT=20            # Talivio's markup on the reseller quote; 0 = pass-through
+DOMAIN_SUPPORTED_TLDS=com,net,org   # empty = every ending the account can sell
+
+NAMECHEAP_API_KEY=… NAMECHEAP_USERNAME=… NAMECHEAP_CLIENT_IP=…   # NAMECHEAP_SANDBOX=true in dev
+OPENPROVIDER_USERNAME=… OPENPROVIDER_PASSWORD=…
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…                   # scoped token; the global key + CLOUDFLARE_EMAIL also works
+PLOI_API_TOKEN=… PLOI_SERVER_ID=… PLOI_SITE_ID=…                 # PLOI_ATTACH_MODE=tenant|alias — pick once, never switch
+MAILCOW_URL=… MAILCOW_API_KEY=… MAILCOW_MX_HOST=… MAILCOW_SPF_VALUE=…
+```
+
+Things every driver's docblock repeats because they cost real time to learn:
+Namecheap sends `ClientIp` with every call and the IP must be whitelisted on
+the account; Ploi and mailcow tokens carry an IP allowlist too, and a 403 there
+is not a scope problem; the Namecheap sandbox is a separate account with its
+own key; Ploi's alias endpoint *replaces* the whole list; Cloudflare's DNS-01
+validation at Ploi only works with a scoped token, never the global key.
+
+Product test suites bind the in-memory fakes so nothing reaches a vendor:
+
+```php
+$this->app->instance(Registrar::class, $this->registrar = new \Talivio\Sdk\Infra\Testing\FakeRegistrar);
+$this->app->instance(Dns::class, $this->dns = new \Talivio\Sdk\Infra\Testing\FakeDns);
+$this->app->instance(Host::class, $this->host = new \Talivio\Sdk\Infra\Testing\FakeHost);
+$this->app->instance(Mail::class, $this->mail = new \Talivio\Sdk\Infra\Testing\FakeMail);
+```
+
+Each fake records what it was asked and exposes knobs (`$taken`, `$issueOnRequest`,
+`$newZonesActive`, `$failWith`, …) to simulate the slow and failing paths.
+
+### Developing the package
+
+```bash
+composer install
+composer test    # PHPUnit through Orchestra Testbench, every HTTP call faked
+composer lint    # Laravel Pint, check only
+```
 
 ## Security
 

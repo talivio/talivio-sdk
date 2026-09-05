@@ -4,10 +4,11 @@ namespace Talivio\Sdk;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
-use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Laravel\Socialite\Facades\Socialite;
 use Talivio\Sdk\Ai\CircuitBreaker;
 use Talivio\Sdk\Ai\Contracts\DegradationStrategy;
@@ -24,10 +25,21 @@ use Talivio\Sdk\Ai\Transports\HttpTransport;
 use Talivio\Sdk\Console\HeartbeatCommand;
 use Talivio\Sdk\Http\Controllers\AccountDeletionController;
 use Talivio\Sdk\Http\Controllers\HumanTokenController;
-use Talivio\Sdk\Ingest\IngestClient;
-use Talivio\Sdk\Ingest\TalivioOps;
 use Talivio\Sdk\Http\Controllers\SupportFormController;
 use Talivio\Sdk\Http\Controllers\TalivioAuthController;
+use Talivio\Sdk\Human\HumanCheck;
+use Talivio\Sdk\Infra\Clients\Cloudflare;
+use Talivio\Sdk\Infra\Clients\Mailcow;
+use Talivio\Sdk\Infra\Clients\Namecheap;
+use Talivio\Sdk\Infra\Clients\Openprovider;
+use Talivio\Sdk\Infra\Clients\Ploi;
+use Talivio\Sdk\Infra\Contracts\Dns;
+use Talivio\Sdk\Infra\Contracts\Host;
+use Talivio\Sdk\Infra\Contracts\Mail;
+use Talivio\Sdk\Infra\Contracts\Registrar;
+use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Ingest\IngestClient;
+use Talivio\Sdk\Ingest\TalivioOps;
 use Throwable;
 
 class TalivioServiceProvider extends ServiceProvider
@@ -54,7 +66,56 @@ class TalivioServiceProvider extends ServiceProvider
         $this->app->singleton(TalivioOps::class);
 
         // Davranışsal insan doğrulaması (human-check bileşeni + Human kuralı).
-        $this->app->singleton(\Talivio\Sdk\Human\HumanCheck::class);
+        $this->app->singleton(HumanCheck::class);
+
+        $this->registerInfra();
+    }
+
+    /**
+     * Alan adı / DNS / barındırma / posta istemcileri (Talivio\Sdk\Infra).
+     *
+     * NEDEN SDK'DA: aynı Namecheap/Cloudflare/Ploi istemcisi Shops ve
+     * Contentio'ya ayrı ayrı yazılmıştı (2026-09-05 incelemesi: ~5.300
+     * satır, iki farklı API yüzeyi, aynı allowlist tuzakları iki kez
+     * keşfedilmiş). Bütün ürünler tek sunucuda ve tek hesap setiyle
+     * çalıştığı için istemci de tek yerde durmalı; ürünlerde yalnız tenant
+     * modeli, faturalama ve UI kalır.
+     *
+     * Sözleşmeler `talivio.infra.{registrar,dns,host,mail}` sürücü adına
+     * göre bağlanır. Kimlik bilgisi eksikse çözümleme anında
+     * NotConfiguredException — bir ürün "yapılandırılmamış" durumunu
+     * göstermek isterse somut sınıfın `fromConfig()`'ini kullanır (null
+     * döner). Ürün kendi bağlamasını yaparsa (ör. testte Fake*) o kazanır:
+     * `bind` sırası ürünün service provider'ında sonradır.
+     */
+    private function registerInfra(): void
+    {
+        $drivers = [
+            Registrar::class => ['talivio.infra.registrar', [
+                Namecheap::NAME => Namecheap::class,
+                Openprovider::NAME => Openprovider::class,
+            ]],
+            Dns::class => ['talivio.infra.dns', [Cloudflare::NAME => Cloudflare::class]],
+            Host::class => ['talivio.infra.host', [Ploi::NAME => Ploi::class]],
+            Mail::class => ['talivio.infra.mail', [Mailcow::NAME => Mailcow::class]],
+        ];
+
+        foreach ($drivers as $contract => [$configKey, $implementations]) {
+            foreach ($implementations as $class) {
+                $this->app->bind($class, fn () => $class::fromConfig()
+                    ?? throw NotConfiguredException::forService($class::NAME, $class::requiredEnv()));
+            }
+
+            $this->app->bind($contract, function ($app) use ($configKey, $implementations) {
+                $driver = (string) config($configKey, array_key_first($implementations));
+
+                if (! isset($implementations[$driver])) {
+                    throw new InvalidArgumentException("Unknown {$configKey} driver \"{$driver}\" — expected one of: ".implode(', ', array_keys($implementations)).'.');
+                }
+
+                return $app->make($implementations[$driver]);
+            });
+        }
     }
 
     public function boot(): void
