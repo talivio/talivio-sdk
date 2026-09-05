@@ -88,8 +88,16 @@ mailboxes** (measured 2026-09-05). All were created by hand over the years
 with the description set to the domain name, and no product's database knows
 about them — Contentio's tables say 0 provisioned domains, Mailio's say 0.
 **They were all attributed on 2026-09-05** via `mailio:mail-owners --apply`:
-24 service-customer domains as `ops:manual` and `talivio.com` (39 mailboxes,
-Talivio's own corporate mail) as `talivio:internal`. Verified before/after:
+`talivio.com` (39 mailboxes, Talivio's own corporate mail) as
+`talivio:internal`, one domain that turned out to be a Contentio site as
+`contentio:site-N`, and the remaining 23 as a blanket `ops:manual`.
+⚠️ Those 23 are NOT all the same thing — some take only WordPress hosting,
+some another Talivio service, some only mail. The per-domain breakdown is
+customer data, so it lives OUT of this public repo, in
+`Mailio/laravel/.claude/memory/mail-domain-attribution.md` (gitignored);
+Eren will supply the split and each one gets retagged to its real owner.
+⚠️ **This repository is publicly readable** — never write customer names,
+domain lists or who-pays-for-what into it. Verified before/after:
 25→25 domains, 118→118 mailboxes, 118 still active, and NO field other than
 `description` changed — mailcow's `edit/domain` does not reset unspecified
 attributes (checked field-by-field on one domain first, then across all 25).
