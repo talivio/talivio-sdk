@@ -1,1 +1,2 @@
 - [Design language lives in the SDK](design-language-lives-in-sdk.md) — the shared visual language ships from talivio/sdk v1.12.0; never copy it into a product.
+- [Infra clients live in the SDK](infra-clients-in-sdk.md) — since v1.25 Namecheap/Openprovider/Cloudflare/Ploi/mailcow ship from Talivio\Sdk\Infra; unconfigured contracts resolve to stand-ins; products type-hint the SDK contracts directly; live env key inventory.
