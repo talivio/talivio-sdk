@@ -119,3 +119,35 @@ deactivates; only edits the description; idempotent; `--claim=product:ref`
 `.env` gets `MAILCOW_URL` (INSTANCE root) + `MAILCOW_API_KEY` — Mailio's old
 block used `MAILCOW_API_URL` = the API root, so the value changes shape, not
 just the key name.
+
+## `ProductMail` consumers (v1.28.1)
+
+Both products a mail package can be sold from now inject
+`Infra\Contracts\ProductMail` and neither has a mailcow client any more.
+`Contracts\Mail` is for Mailio itself and ops tooling only — it reaches the
+whole shared instance, hand-run domains included.
+
+- **Contentio** 2026-09-05, `customer_ref = "site-{id}"`.
+- **Shops** 2026-09-05, `customer_ref = "store-{id}"`. Its own
+  `MailProvider`/`MailcowProvider` pair, `MAILCOW_*` config and unit test are
+  deleted; 1766 tests green.
+
+Two shapes worth reusing, because the swap is not one-for-one:
+
+- **`createDomain()` is not idempotent and an unverified domain cannot hold
+  addresses**, where the old `ensureDomain()` was one safe-to-repeat call. Both
+  products wrap it: look the domain up first, register only if absent, publish
+  Mailio's records into our own zone when we run it, then re-verify. Shops keeps
+  this in `Modules\Email\Support\MailDomains`; every mailbox/alias creation goes
+  through it.
+- **Where the product runs the zone, publish the ownership TXT yourself** — the
+  customer then never sees a second verification step at all. Both products key
+  this off their own "we run this zone" column (`dns_zone_id` in Shops). On a
+  customer-run zone they need a "check DNS again" action, because the record is
+  theirs to publish and propagation takes a moment either way.
+
+⚠️ Neither product has `TALIVIO_MAIL_KEY` in production, so both resolve
+`UnconfiguredProductMail`: pages render, provisioning refuses. Nothing regressed
+— neither had a working mailcow key either. Issuing a key is Eren's to do
+(`php artisan mailio:mail-key <product>`), and its output must not reach a chat
+or a log.
