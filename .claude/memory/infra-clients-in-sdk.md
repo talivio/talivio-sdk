@@ -151,3 +151,37 @@ Two shapes worth reusing, because the swap is not one-for-one:
 — neither had a working mailcow key either. Issuing a key is Eren's to do
 (`php artisan mailio:mail-key <product>`), and its output must not reach a chat
 or a log.
+
+## Domain ownership: one proof, three former copies (v1.29.0)
+
+`Infra\Contracts\DnsProbe` reads PUBLIC DNS (A/CNAME/TXT); `Support\SystemDnsProbe`
+is the `dns_get_record` implementation, bound as a singleton; `Testing\FakeDnsProbe`
+replaces the hand-rolled doubles Shops, Contentio and talivio.com each had.
+`Support\DomainOwnership` carries the policy: a CNAME at an accepted platform host
+AND the per-claim token at `_talivio-verify.{domain}`.
+
+- **Not `Dns`.** That contract is the control plane of zones we run and knows what
+  we *intended*; `DnsProbe` knows what the internet *answers*. A customer's own
+  zone answers here and not there, and a zone we edited a second ago answers there
+  and not yet here.
+- **No credentials, no driver, no `Unconfigured` variant** — that is why it sits
+  outside `registerInfra()`'s driver table.
+- **Every lookup answers "nothing" rather than throwing.** These calls sit behind a
+  customer-facing button and inside scheduled sweeps; a briefly unhappy resolver is
+  a "not yet".
+- **Accepted CNAME targets stay in the product** (current platform domain + legacy
+  ones): that is config, not policy. Contentio keeps it in
+  `DomainController::acceptedCnameTargets()`, static so the scheduled re-check
+  cannot drift from the panel button; Shops reads it inline in `verifyByProof()`.
+- **Shops keeps the two halves separate** instead of calling `verify()`, so the
+  merchant is told which record is missing.
+
+Three neighbouring checks that are deliberately NOT this one:
+NS delegation needs no token (only the registrant can repoint NS, so
+`Dns::zoneIsActive()` is the proof); mail ownership is Mailio's own apex TXT with
+its own token derivation and no CNAME (`MailDomainVerifier`, stays in Mailio);
+Contentio's Cloudflare-cloud CNAME hides its target from public DNS, so
+`cnamePointsAtAny()` would never see it.
+
+Consumers: Shops 6300bb0, Contentio 3f9e9a0 (+6 new tests for a verify path that
+had none — it could not be tested before without live DNS), talivio.com 43c7cfe.
