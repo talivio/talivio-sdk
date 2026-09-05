@@ -318,6 +318,24 @@ class MailcowTest extends TestCase
             && ($request['attr']['password2'] ?? null) === 'correct-horse-battery');
     }
 
+    /**
+     * The list is replaced wholesale, so an empty array is a real change
+     * ("stop forwarding") and must not be skipped the way an absent key is.
+     */
+    public function test_forwarding_is_replaced_wholesale_and_can_be_cleared(): void
+    {
+        Http::fake([self::API.'/edit/mailbox' => Http::response([['type' => 'success', 'msg' => 'mailbox_modified']])]);
+
+        $mail = $this->mail();
+        $mail->updateMailbox('info@myshop.com', ['forward_to' => ['a@x.com', 'b@x.com'], 'forward_only' => true]);
+
+        Http::assertSent(fn (Request $request) => $request['attr'] === ['forward_to' => 'a@x.com,b@x.com', 'forward_only' => '1']);
+
+        $mail->updateMailbox('info@myshop.com', ['forward_to' => []]);
+
+        Http::assertSent(fn (Request $request) => $request['attr'] === ['forward_to' => '']);
+    }
+
     public function test_an_empty_change_set_sends_nothing(): void
     {
         Http::fake();

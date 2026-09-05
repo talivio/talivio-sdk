@@ -217,6 +217,14 @@ class FakeMail implements Mail
         if (isset($changes['password'])) {
             $this->mailboxes[$email]['password_changed'] = true;
         }
+
+        if (array_key_exists('forward_to', $changes)) {
+            $this->mailboxes[$email]['forward_to'] = implode(',', (array) $changes['forward_to']);
+        }
+
+        if (isset($changes['forward_only'])) {
+            $this->mailboxes[$email]['forward_only'] = $changes['forward_only'] ? 1 : 0;
+        }
     }
 
     public function setMailboxesActive(array $emails, bool $active): void

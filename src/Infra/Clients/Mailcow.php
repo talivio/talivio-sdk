@@ -238,6 +238,16 @@ class Mailcow implements Mail
             $attr['active'] = $changes['active'] ? '1' : '0';
         }
 
+        // Replaces the whole list; an empty array stops forwarding. Uses
+        // array_key_exists, not isset, so [] is honoured rather than skipped.
+        if (array_key_exists('forward_to', $changes)) {
+            $attr['forward_to'] = implode(',', (array) $changes['forward_to']);
+        }
+
+        if (isset($changes['forward_only'])) {
+            $attr['forward_only'] = $changes['forward_only'] ? '1' : '0';
+        }
+
         if ($attr === []) {
             return;
         }

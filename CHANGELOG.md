@@ -4,6 +4,14 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.26.1 — 2026-09-05
+
+- `Mail::updateMailbox()` accepts `forward_to` and `forward_only`, the mailbox
+  forwarding mailcow supports and Mailio's "forward a copy elsewhere" screen
+  needs. `forward_to` replaces the whole list and is read with
+  `array_key_exists`, so passing `[]` clears forwarding instead of being
+  skipped as an absent key.
+
 ## 1.26.0 — 2026-09-05
 
 - **`Mail` grows to the full mail-host admin surface**, because Mailio is now

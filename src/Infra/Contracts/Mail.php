@@ -166,9 +166,14 @@ interface Mail
     public function mailbox(string $email): ?array;
 
     /**
-     * Changes an existing mailbox. Only the keys given are touched.
+     * Changes an existing mailbox. Only the keys given are touched, and an
+     * empty change set is a no-op rather than a call.
      *
-     * @param  array{password?: string, name?: string, quota_mb?: int, active?: bool}  $changes
+     * `forward_to` replaces the whole forwarding list — pass an empty
+     * array to stop forwarding. `forward_only` true means the mailbox
+     * relays without keeping a copy.
+     *
+     * @param  array{password?: string, name?: string, quota_mb?: int, active?: bool, forward_to?: list<string>, forward_only?: bool}  $changes
      *
      * @throws RuntimeException on any host-side failure
      */
