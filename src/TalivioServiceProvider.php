@@ -35,11 +35,13 @@ use Talivio\Sdk\Infra\Clients\Namecheap;
 use Talivio\Sdk\Infra\Clients\Openprovider;
 use Talivio\Sdk\Infra\Clients\Ploi;
 use Talivio\Sdk\Infra\Contracts\Dns;
+use Talivio\Sdk\Infra\Contracts\DnsProbe;
 use Talivio\Sdk\Infra\Contracts\Host;
 use Talivio\Sdk\Infra\Contracts\Mail;
 use Talivio\Sdk\Infra\Contracts\ProductMail;
 use Talivio\Sdk\Infra\Contracts\Registrar;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\SystemDnsProbe;
 use Talivio\Sdk\Infra\Support\UnconfiguredDns;
 use Talivio\Sdk\Infra\Support\UnconfiguredHost;
 use Talivio\Sdk\Infra\Support\UnconfiguredMail;
@@ -103,6 +105,14 @@ class TalivioServiceProvider extends ServiceProvider
      */
     private function registerInfra(): void
     {
+        /*
+         * Genel DNS okuyucu. Sürücü seçimi YOK ve kimlik bilgisi
+         * istemez — okuduğu şey herkese açık DNS, bir satıcının kontrol
+         * düzlemi değil. Bu yüzden aşağıdaki tabloya girmiyor:
+         * yapılandırılmamış bir hâli olamaz.
+         */
+        $this->app->singleton(DnsProbe::class, SystemDnsProbe::class);
+
         $drivers = [
             Registrar::class => ['talivio.infra.registrar', UnconfiguredRegistrar::class, [
                 Namecheap::NAME => Namecheap::class,

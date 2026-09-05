@@ -573,6 +573,7 @@ being copied into each product.
 | `Infra\Contracts\Host` | Ploi | attach a domain to the product's site, request/poll its certificate; create/delete whole sites for ops |
 | `Infra\Contracts\ProductMail` | Mailio | **what a product uses for mail** — provision domains, mailboxes and aliases for its own customers, scoped to them |
 | `Infra\Contracts\Mail` | mailcow | the raw shared mail host: domains, mailboxes, aliases, quota and usage, the MX/SPF/DMARC/DKIM records a domain needs. Mailio and ops tooling only |
+| `Infra\Contracts\DnsProbe` | PHP's resolver | reads **public** DNS — A, CNAME, TXT — for "does the world see this yet?"; no credentials, no driver choice |
 
 Type-hint the contract and the package binds the configured driver. Missing
 credentials fail at resolution with a `NotConfiguredException` naming the
@@ -654,6 +655,35 @@ is not a scope problem; the Namecheap sandbox is a separate account with its
 own key; Ploi's alias endpoint *replaces* the whole list; Cloudflare's DNS-01
 validation at Ploi only works with a scoped token, never the global key.
 
+### Proving a customer owns a domain
+
+`Dns` is the control plane of the zones we run; `DnsProbe` is what the
+internet currently answers, which is a different fact and usually the one a
+verification flow needs. `Support\DomainOwnership` is the check Shops and
+Contentio had each written out separately:
+
+```php
+use Talivio\Sdk\Infra\Support\DomainOwnership;
+
+public function __construct(private DomainOwnership $ownership) {}
+
+$this->ownership->tokenHost($domain);                    // _talivio-verify.acme.com — show this
+$this->ownership->cnamePointsAtAny($domain, $accepted);  // $accepted = current platform domain + legacy ones
+$this->ownership->tokenIsPublished($domain, $token);
+$this->ownership->verify($domain, $token, $accepted);    // both, when you don't need to say which half failed
+```
+
+**Both halves are required.** A CNAME only shows the domain routes here, and
+its target is public — printed in the product's own UI — so any other tenant
+could add the same domain string and pass that check the moment the real owner
+points it at us for their own reasons. The per-claim token is shown to one
+tenant only and can only be published by whoever controls the domain's DNS.
+
+Two neighbouring checks that deliberately are **not** this one: nameserver
+delegation needs no token at all (only the registrant can repoint NS, so
+`Dns::zoneIsActive()` is itself the proof), and mail ownership is Mailio's own
+apex TXT with no CNAME involved, because a mail domain routes nothing to us.
+
 Product test suites bind the in-memory fakes so nothing reaches a vendor:
 
 ```php
@@ -661,6 +691,10 @@ $this->app->instance(Registrar::class, $this->registrar = new \Talivio\Sdk\Infra
 $this->app->instance(Dns::class, $this->dns = new \Talivio\Sdk\Infra\Testing\FakeDns);
 $this->app->instance(Host::class, $this->host = new \Talivio\Sdk\Infra\Testing\FakeHost);
 $this->app->instance(Mail::class, $this->mail = new \Talivio\Sdk\Infra\Testing\FakeMail);
+$this->app->instance(ProductMail::class, $this->productMail = new \Talivio\Sdk\Infra\Testing\FakeProductMail);
+$this->app->instance(DnsProbe::class, (new \Talivio\Sdk\Infra\Testing\FakeDnsProbe)
+    ->withCname('acme.com', ['shops.talivio.com'])
+    ->publishToken('acme.com', $domain->verification_token));
 ```
 
 Each fake records what it was asked and exposes knobs (`$taken`, `$issueOnRequest`,

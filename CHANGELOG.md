@@ -4,6 +4,28 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.29.0 - 2026-09-05
+
+- **`DnsProbe` + `Support\DomainOwnership` — proving a customer owns a
+  domain, once.** Shops and Contentio had each written the same two-part
+  check (a CNAME at the platform plus a per-claim TXT token at
+  `_talivio-verify.{domain}`), and talivio.com had a third copy of the raw
+  lookup wrapper underneath it. The policy and its reasoning now live in one
+  place, with the products keeping their own customer-facing wording.
+- `DnsProbe` reads PUBLIC DNS and is deliberately not `Dns`: that contract is
+  the control plane of the zones we run and knows what we intended, this one
+  knows what the internet currently answers. It takes no credentials, has no
+  driver choice and cannot be "unconfigured"; `Support\SystemDnsProbe` is
+  bound as a singleton.
+- Every lookup answers "nothing" instead of throwing. These calls sit behind
+  a button a customer clicks and inside scheduled sweeps, where a briefly
+  unhappy resolver is a "not yet".
+- `Testing\FakeDnsProbe` replaces three hand-rolled test doubles, and matches
+  hosts case-insensitively with the trailing dot stripped — the way a real
+  answer arrives, so a test cannot pass only for the exact string it typed.
+- Mail ownership stays in Mailio (`MailDomainVerifier`): apex TXT, its own
+  token derivation, no CNAME. It is a different question, not a fourth copy.
+
 ## 1.28.1 - 2026-09-05
 
 - Documents 1.28.0 in the README and this file; no code change. (The 1.28.0
