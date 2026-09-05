@@ -30,17 +30,20 @@ use Talivio\Sdk\Http\Controllers\TalivioAuthController;
 use Talivio\Sdk\Human\HumanCheck;
 use Talivio\Sdk\Infra\Clients\Cloudflare;
 use Talivio\Sdk\Infra\Clients\Mailcow;
+use Talivio\Sdk\Infra\Clients\MailioGateway;
 use Talivio\Sdk\Infra\Clients\Namecheap;
 use Talivio\Sdk\Infra\Clients\Openprovider;
 use Talivio\Sdk\Infra\Clients\Ploi;
 use Talivio\Sdk\Infra\Contracts\Dns;
 use Talivio\Sdk\Infra\Contracts\Host;
 use Talivio\Sdk\Infra\Contracts\Mail;
+use Talivio\Sdk\Infra\Contracts\ProductMail;
 use Talivio\Sdk\Infra\Contracts\Registrar;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
 use Talivio\Sdk\Infra\Support\UnconfiguredDns;
 use Talivio\Sdk\Infra\Support\UnconfiguredHost;
 use Talivio\Sdk\Infra\Support\UnconfiguredMail;
+use Talivio\Sdk\Infra\Support\UnconfiguredProductMail;
 use Talivio\Sdk\Infra\Support\UnconfiguredRegistrar;
 use Talivio\Sdk\Ingest\IngestClient;
 use Talivio\Sdk\Ingest\TalivioOps;
@@ -108,6 +111,9 @@ class TalivioServiceProvider extends ServiceProvider
             Dns::class => ['talivio.infra.dns', UnconfiguredDns::class, [Cloudflare::NAME => Cloudflare::class]],
             Host::class => ['talivio.infra.host', UnconfiguredHost::class, [Ploi::NAME => Ploi::class]],
             Mail::class => ['talivio.infra.mail', UnconfiguredMail::class, [Mailcow::NAME => Mailcow::class]],
+            // What a PRODUCT should inject. Mail::class above is the raw
+            // shared instance and reaches domains no product owns.
+            ProductMail::class => ['talivio.infra.product_mail', UnconfiguredProductMail::class, [MailioGateway::NAME => MailioGateway::class]],
         ];
 
         foreach ($drivers as $contract => [$configKey, $unconfigured, $implementations]) {

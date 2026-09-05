@@ -175,6 +175,7 @@ return [
         'dns' => env('DOMAIN_DNS', 'cloudflare'),
         'host' => env('DOMAIN_HOSTING', 'ploi'),
         'mail' => env('DOMAIN_MAIL', 'mailcow'),
+        'product_mail' => env('DOMAIN_PRODUCT_MAIL', 'mailio'),
 
         // Kayıt operatöründen bağımsız satış politikası — her sürücü aynı
         // marjı ve aynı TLD listesini uygular.
@@ -250,9 +251,31 @@ return [
             'base_url' => env('PLOI_BASE_URL', 'https://ploi.io/api'),
         ],
 
+        /*
+         | Mailio'nun sunucudan-sunucuya posta ucu — BİR ÜRÜNÜN KULLANMASI
+         | GEREKEN YER BURASI (Talivio\Sdk\Infra\Contracts\ProductMail).
+         |
+         | Aşağıdaki `mailcow` bloğu ham posta sunucusudur ve PAYLAŞILAN
+         | örneğin tamamına erişir — hiçbir ürüne ait olmayan, elle
+         | yönetilen müşteri alan adları dahil. Mailio ise her üründe
+         | satılan posta paketlerinin kayıt sahibi (2026-09-05 kararı) ve
+         | her çağrıyı çağıran ürünün kendi müşterileriyle sınırlıyor.
+         |
+         | Anahtar Mailio'da üretilir: `php artisan mailio:mail-key <urun>`.
+         | Düz metin bir kez görünür; Mailio yalnız hash'ini saklar.
+         */
+        'mail_gateway' => [
+            'base_url' => env('TALIVIO_MAIL_URL', 'https://mailio.talivio.com/api/v1/mail'),
+            'key' => env('TALIVIO_MAIL_KEY'),
+            'timeout' => env('TALIVIO_MAIL_TIMEOUT', 20),
+        ],
+
         // mailcow yönetim API'si — tüm müşteri alan adlarını barındıran TEK
         // örnek. mx_host/spf_value, bölgesi bizde olan alan adlarına
         // MX/SPF/DKIM'in otomatik yazılması için.
+        //
+        // ⚠️ ÜRÜNLER BUNU DOĞRUDAN KULLANMAMALI; yukarıdaki mail_gateway'i
+        // kullanın. Bu blok Mailio'nun kendisi ve ops araçları içindir.
         'mailcow' => [
             'url' => env('MAILCOW_URL'),
             'api_key' => env('MAILCOW_API_KEY'),
