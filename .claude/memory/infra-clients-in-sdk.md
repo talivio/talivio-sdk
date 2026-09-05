@@ -83,16 +83,25 @@ the product).
   `/api/v1/...` itself. Mailio's dead block used `MAILCOW_API_URL` = the API
   root. Same key name `MAILCOW_API_KEY`.
 
-⚠️ **The shared instance is NOT empty and no product owns it.** Measured
-2026-09-05 via Contentio's credentials: **25 domains, 118 mailboxes**, all
-created by hand (description = the domain name), all `active=1`, and **zero**
-carry an owner tag. Contentio's own tables say 0 provisioned domains and 0
+⚠️ **The shared instance carries real customer mail: 25 domains, 118
+mailboxes** (measured 2026-09-05). All were created by hand over the years
+with the description set to the domain name, and no product's database knows
+about them — Contentio's tables say 0 provisioned domains, Mailio's say 0.
+**They were all attributed on 2026-09-05** via `mailio:mail-owners --apply`:
+24 service-customer domains as `ops:manual` and `talivio.com` (39 mailboxes,
+Talivio's own corporate mail) as `talivio:internal`. Verified before/after:
+25→25 domains, 118→118 mailboxes, 118 still active, and NO field other than
+`description` changed — mailcow's `edit/domain` does not reset unspecified
+attributes (checked field-by-field on one domain first, then across all 25).
+A pre-write snapshot lives at `storage/mailcow-domains-before.json` on
+mailio.talivio.com. Contentio's own tables say 0 provisioned domains and 0
 mailboxes; Mailio's say 0/0/1-company. So real customer mail is running on an
 instance that no product's database knows about. Consequences: (a) the
-`deleteDomain`/`setDomainActive` powers now on the shared contract are
-genuinely dangerous here, (b) before any product is wired to manage this
-instance those 25 domains need attributing — only Eren knows who owns them,
-(c) a backfill of `MailOwner` tags is the natural first step.
+`deleteDomain`/`setDomainActive` powers on the shared contract are genuinely
+dangerous on this instance, (b) `ops:manual` is a REAL answer meaning "a human
+runs this, no product automation owns it" — product code must refuse to touch
+a domain whose tag is not its own, (c) `talivio:internal` is the one domain
+whose loss would take down every product's outbound mail identity.
 
 **Backfill tool (2026-09-05):** `php artisan mailio:mail-owners` on
 mailio.talivio.com audits every domain of the shared instance and, with
