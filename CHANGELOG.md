@@ -4,6 +4,18 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.26.2 - 2026-09-05
+
+- **`HostRefusedException`** separates "the vendor answered NO" from "the
+  vendor could not be reached". They need opposite handling: a refusal
+  carries a reason the customer should read (weak password, quota
+  exceeded, duplicate) and retrying never helps; an outage deserves "try
+  again in a moment" and no detail. Both used to arrive as plain
+  RuntimeException, so a product either leaked transport errors to
+  customers or replaced real refusal reasons with a misleading "server
+  unreachable" - Mailio hit the second case. mailcow raises it; existing
+  `catch (RuntimeException)` blocks keep working, since it extends that.
+
 ## 1.26.1 — 2026-09-05
 
 - `Mail::updateMailbox()` accepts `forward_to` and `forward_only`, the mailbox

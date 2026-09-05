@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Talivio\Sdk\Infra\Clients\Mailcow;
 use Talivio\Sdk\Infra\Contracts\Mail;
+use Talivio\Sdk\Infra\Exceptions\HostRefusedException;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
 use Talivio\Sdk\Infra\Support\MailOwner;
 use Talivio\Sdk\Infra\Support\UnconfiguredMail;
@@ -94,10 +95,31 @@ class MailcowTest extends TestCase
     {
         Http::fake([self::API.'/add/mailbox' => Http::response([['type' => 'danger', 'msg' => ['password_complexity', 'min 8 chars']]], 200)]);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('password_complexity min 8 chars');
+        try {
+            $this->mail()->addMailbox('myshop.com', 'info', 'short');
+            $this->fail('A refused write must throw.');
+        } catch (HostRefusedException $e) {
+            // The host's own wording is what the customer needs to read.
+            $this->assertSame('password_complexity min 8 chars', $e->reason());
+        }
+    }
 
-        $this->mail()->addMailbox('myshop.com', 'info', 'short');
+    /**
+     * A refusal and an outage need opposite handling: one carries a reason
+     * worth showing and will never succeed on retry, the other is "try
+     * again in a moment". Only the refusal is a HostRefusedException.
+     */
+    public function test_an_outage_is_not_a_refusal(): void
+    {
+        Http::fake([self::API.'/add/mailbox' => Http::response('gateway down', 502)]);
+
+        try {
+            $this->mail()->addMailbox('myshop.com', 'info', 'correct-horse-battery');
+            $this->fail('An unreachable host must throw.');
+        } catch (RuntimeException $e) {
+            $this->assertNotInstanceOf(HostRefusedException::class, $e);
+            $this->assertStringContainsString('HTTP 502', $e->getMessage());
+        }
     }
 
     public function test_an_http_failure_is_reported_with_its_status(): void

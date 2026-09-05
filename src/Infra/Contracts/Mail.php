@@ -33,6 +33,12 @@ use Talivio\Sdk\Infra\Support\MailOwner;
  * refused write (the error is in the body), so "no exception" is the only
  * reliable success signal — never inspect a return value for it.
  *
+ * ⚠️ Two failure kinds, and callers should treat them differently: a
+ * HostRefusedException means the host answered NO and its `reason()` is
+ * worth showing the customer (weak password, quota exceeded, duplicate);
+ * any other RuntimeException means the host could not be reached, which
+ * deserves "try again in a moment" and no detail.
+ *
  * ⚠️ mailcow's API has an IP allowlist ("Allow from" under Configuration →
  * Access → API) — same trap as Ploi/Namecheap/Cloudflare.
  */

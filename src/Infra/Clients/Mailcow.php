@@ -7,6 +7,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Talivio\Sdk\Infra\Contracts\Mail;
+use Talivio\Sdk\Infra\Exceptions\HostRefusedException;
 use Talivio\Sdk\Infra\Support\MailOwner;
 use Talivio\Sdk\Infra\Support\RetriesTransientFailures;
 
@@ -477,7 +478,9 @@ class Mailcow implements Mail
                 continue;
             }
 
-            throw new RuntimeException("mailcow error: {$msg}");
+            // mailcow answered and said no. Distinct from an outage: the
+            // reason is worth showing the customer and retrying won't help.
+            throw HostRefusedException::withReason('mailcow', $msg);
         }
 
         return $json;
