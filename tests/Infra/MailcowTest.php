@@ -8,6 +8,7 @@ use RuntimeException;
 use Talivio\Sdk\Infra\Clients\Mailcow;
 use Talivio\Sdk\Infra\Contracts\Mail;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\MailOwner;
 use Talivio\Sdk\Infra\Support\UnconfiguredMail;
 use Talivio\Sdk\Tests\TestCase;
 
@@ -227,5 +228,210 @@ class MailcowTest extends TestCase
         $this->mail()->addAlias('hello@myshop.com', 'me@gmail.com');
 
         Http::assertSent(fn (Request $request) => $request['address'] === 'hello@myshop.com' && $request['goto'] === 'me@gmail.com' && $request['active'] === 1);
+    }
+
+    // ------------------------------------------------------------------
+    // Owner-of-record surface (Mailio)
+    // ------------------------------------------------------------------
+
+    /**
+     * A domain nobody has proven ownership of must never accept mail —
+     * mailcow treats a local domain as authoritative and would swallow
+     * mail belonging to its real owner.
+     */
+    public function test_a_domain_can_be_created_switched_off_and_carries_its_owner_tag(): void
+    {
+        Http::fake([
+            self::API.'/get/domain/myshop.com' => Http::response([]),
+            self::API.'/add/domain' => Http::response([['type' => 'success', 'msg' => 'domain_added']]),
+        ]);
+
+        $this->mail()->addDomain(
+            'MyShop.com',
+            maxMailboxes: 50,
+            maxQuotaMb: 10240,
+            active: false,
+            owner: new MailOwner('mailio', 'company-7', 'Acme Ltd'),
+            defaultQuotaMb: 2048,
+            totalQuotaMb: 51200,
+            maxAliases: 25,
+        );
+
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/add/domain')
+            && $request['domain'] === 'myshop.com'
+            && $request['description'] === 'Acme Ltd [mailio:company-7]'
+            && $request['active'] === 0
+            && $request['mailboxes'] === 50
+            && $request['defquota'] === 2048
+            && $request['maxquota'] === 10240
+            && $request['quota'] === 51200
+            && $request['aliases'] === 25);
+    }
+
+    public function test_set_domain_active_toggles_the_domain(): void
+    {
+        Http::fake([self::API.'/edit/domain' => Http::response([['type' => 'success', 'msg' => 'domain_modified']])]);
+
+        $this->mail()->setDomainActive('myshop.com', true);
+
+        Http::assertSent(fn (Request $request) => $request['items'] === ['myshop.com'] && $request['attr'] === ['active' => '1']);
+    }
+
+    public function test_domain_returns_null_for_a_domain_the_host_does_not_have(): void
+    {
+        Http::fake([
+            self::API.'/get/domain/known.com' => Http::response(['domain_name' => 'known.com', 'active' => 1]),
+            self::API.'/get/domain/unknown.com' => Http::response([]),
+        ]);
+
+        $this->assertSame('known.com', $this->mail()->domain('known.com')['domain_name']);
+        $this->assertNull($this->mail()->domain('unknown.com'));
+    }
+
+    public function test_list_domains_returns_the_whole_instance(): void
+    {
+        Http::fake([self::API.'/get/domain/all' => Http::response([
+            ['domain_name' => 'a.com', 'description' => 'Acme [mailio:company-7]'],
+            ['domain_name' => 'b.com', 'description' => 'Contentio'],
+        ])]);
+
+        $rows = $this->mail()->listDomains();
+
+        $this->assertCount(2, $rows);
+        $this->assertSame('company-7', MailOwner::fromDescription($rows[0]['description'])->ref);
+        $this->assertNull(MailOwner::fromDescription($rows[1]['description']), 'A legacy description has no owner tag.');
+    }
+
+    public function test_update_mailbox_sends_only_the_changed_attributes_and_doubles_the_password(): void
+    {
+        Http::fake([self::API.'/edit/mailbox' => Http::response([['type' => 'success', 'msg' => 'mailbox_modified']])]);
+
+        $mail = $this->mail();
+        $mail->updateMailbox('info@myshop.com', ['quota_mb' => 5120, 'active' => false]);
+
+        Http::assertSent(fn (Request $request) => $request['items'] === ['info@myshop.com']
+            && $request['attr'] === ['quota' => 5120, 'active' => '0']);
+
+        $mail->updateMailbox('info@myshop.com', ['password' => 'correct-horse-battery']);
+
+        Http::assertSent(fn (Request $request) => ($request['attr']['password'] ?? null) === 'correct-horse-battery'
+            && ($request['attr']['password2'] ?? null) === 'correct-horse-battery');
+    }
+
+    public function test_an_empty_change_set_sends_nothing(): void
+    {
+        Http::fake();
+
+        $this->mail()->updateMailbox('info@myshop.com', []);
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * A billing webhook suspends a whole account; doing it per mailbox is
+     * a round trip each inside a request that has to answer fast.
+     */
+    public function test_bulk_suspend_sends_one_call_for_every_mailbox(): void
+    {
+        Http::fake([self::API.'/edit/mailbox' => Http::response([['type' => 'success', 'msg' => 'mailbox_modified']])]);
+
+        $this->mail()->setMailboxesActive(['a@x.com', 'B@x.com', '', 'c@x.com'], false);
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (Request $request) => $request['items'] === ['a@x.com', 'b@x.com', 'c@x.com']
+            && $request['attr'] === ['active' => '0']);
+    }
+
+    public function test_bulk_suspend_of_an_empty_list_sends_nothing(): void
+    {
+        Http::fake();
+
+        $this->mail()->setMailboxesActive([], false);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_mailbox_quota_reports_bytes_and_a_percentage(): void
+    {
+        Http::fake([
+            self::API.'/get/mailbox/info@myshop.com' => Http::response([
+                'username' => 'info@myshop.com', 'quota' => 1000, 'quota_used' => 250,
+            ]),
+            self::API.'/get/mailbox/gone@myshop.com' => Http::response([]),
+        ]);
+
+        $this->assertSame(['used' => 250, 'total' => 1000, 'percent' => 25.0], $this->mail()->mailboxQuota('info@myshop.com'));
+        // A dashboard listing a stale row must render, not blow up.
+        $this->assertSame(['used' => 0, 'total' => 0, 'percent' => 0.0], $this->mail()->mailboxQuota('gone@myshop.com'));
+    }
+
+    public function test_resource_summary_aggregates_across_domains(): void
+    {
+        Http::fake([
+            self::API.'/get/mailbox/all/a.com' => Http::response([
+                ['username' => 'x@a.com', 'quota' => 1000, 'quota_used' => 400],
+                ['username' => 'y@a.com', 'quota' => 1000, 'quota_used' => 100],
+            ]),
+            self::API.'/get/mailbox/all/b.com' => Http::response([['username' => 'z@b.com', 'quota' => 2000, 'quota_used' => 500]]),
+            self::API.'/get/alias/all/a.com' => Http::response([['id' => 1, 'address' => 'hi@a.com']]),
+            self::API.'/get/alias/all/b.com' => Http::response([]),
+        ]);
+
+        $this->assertSame([
+            'mailboxes' => 3,
+            'aliases' => 1,
+            'used_bytes' => 1000,
+            'quota_bytes' => 4000,
+            'usage_percent' => 25.0,
+        ], $this->mail()->resourceSummary(['a.com', 'b.com']));
+    }
+
+    public function test_count_aliases_asks_the_host_per_domain(): void
+    {
+        Http::fake([
+            self::API.'/get/alias/all/a.com' => Http::response([['id' => 1], ['id' => 2]]),
+            self::API.'/get/alias/all/b.com' => Http::response([['id' => 3]]),
+        ]);
+
+        $this->assertSame(3, $this->mail()->countAliases(['a.com', 'b.com']));
+    }
+
+    public function test_an_alias_can_be_deleted_by_id_without_a_lookup(): void
+    {
+        Http::fake([self::API.'/delete/alias' => Http::response([['type' => 'success', 'msg' => 'alias_removed']])]);
+
+        $this->mail()->deleteAliasById(9);
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (Request $request) => $request->data() === ['9']);
+    }
+
+    public function test_update_alias_edits_by_id(): void
+    {
+        Http::fake([self::API.'/edit/alias' => Http::response([['type' => 'success', 'msg' => 'alias_modified']])]);
+
+        $this->mail()->updateAlias(9, ['goto' => 'new@gmail.com', 'active' => true]);
+
+        Http::assertSent(fn (Request $request) => $request['items'] === ['9']
+            && $request['attr'] === ['goto' => 'new@gmail.com', 'active' => '1']);
+    }
+
+    public function test_sync_jobs_are_listed_created_and_deleted(): void
+    {
+        Http::fake([
+            self::API.'/get/syncjobs/all/no_passwords' => Http::response([['id' => 3, 'user2' => 'info@myshop.com']]),
+            self::API.'/add/syncjob' => Http::response([['type' => 'success', 'msg' => 'syncjob_added']]),
+            self::API.'/delete/syncjob' => Http::response([['type' => 'success', 'msg' => 'syncjob_removed']]),
+        ]);
+
+        $mail = $this->mail();
+
+        $this->assertSame([['id' => 3, 'user2' => 'info@myshop.com']], $mail->listSyncJobs());
+
+        $mail->addSyncJob(['username' => 'info@myshop.com', 'host1' => 'imap.old.com']);
+        $mail->deleteSyncJob(3);
+
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/add/syncjob') && $request['host1'] === 'imap.old.com');
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/delete/syncjob') && $request->data() === ['3']);
     }
 }

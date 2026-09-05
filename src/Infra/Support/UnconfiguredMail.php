@@ -17,12 +17,30 @@ final class UnconfiguredMail implements Mail
      */
     public function __construct(private string $service, private array $envKeys) {}
 
-    public function addDomain(string $domain, int $maxMailboxes = 10, int $maxQuotaMb = 10240): void
+    public function addDomain(
+        string $domain,
+        int $maxMailboxes = 10,
+        int $maxQuotaMb = 10240,
+        bool $active = true,
+        ?MailOwner $owner = null,
+        ?int $defaultQuotaMb = null,
+        ?int $totalQuotaMb = null,
+        ?int $maxAliases = null,
+    ): void {
+        throw $this->exception();
+    }
+
+    public function listDomains(): array
     {
         throw $this->exception();
     }
 
-    public function dkim(string $domain): ?array
+    public function domain(string $domain): ?array
+    {
+        throw $this->exception();
+    }
+
+    public function setDomainActive(string $domain, bool $active): void
     {
         throw $this->exception();
     }
@@ -32,12 +50,37 @@ final class UnconfiguredMail implements Mail
         throw $this->exception();
     }
 
+    public function dkim(string $domain): ?array
+    {
+        throw $this->exception();
+    }
+
     public function dnsRecords(string $domain): array
     {
         throw $this->exception();
     }
 
-    public function addMailbox(string $domain, string $localPart, string $password, string $name = ''): void
+    public function addMailbox(string $domain, string $localPart, string $password, string $name = '', ?int $quotaMb = null): void
+    {
+        throw $this->exception();
+    }
+
+    public function mailbox(string $email): ?array
+    {
+        throw $this->exception();
+    }
+
+    public function updateMailbox(string $email, array $changes): void
+    {
+        throw $this->exception();
+    }
+
+    public function setMailboxesActive(array $emails, bool $active): void
+    {
+        throw $this->exception();
+    }
+
+    public function mailboxQuota(string $email): array
     {
         throw $this->exception();
     }
@@ -62,7 +105,42 @@ final class UnconfiguredMail implements Mail
         throw $this->exception();
     }
 
+    public function deleteAliasById(int $aliasId): void
+    {
+        throw $this->exception();
+    }
+
+    public function updateAlias(int $aliasId, array $changes): void
+    {
+        throw $this->exception();
+    }
+
     public function listAliases(string $domain): array
+    {
+        throw $this->exception();
+    }
+
+    public function countAliases(array $domains): int
+    {
+        throw $this->exception();
+    }
+
+    public function resourceSummary(array $domains): array
+    {
+        throw $this->exception();
+    }
+
+    public function listSyncJobs(): array
+    {
+        throw $this->exception();
+    }
+
+    public function addSyncJob(array $job): void
+    {
+        throw $this->exception();
+    }
+
+    public function deleteSyncJob(int $jobId): void
     {
         throw $this->exception();
     }

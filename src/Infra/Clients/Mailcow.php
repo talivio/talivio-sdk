@@ -7,16 +7,22 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Talivio\Sdk\Infra\Contracts\Mail;
+use Talivio\Sdk\Infra\Support\MailOwner;
 use Talivio\Sdk\Infra\Support\RetriesTransientFailures;
 
 /**
  * mailcow's admin API (`talivio.infra.mailcow`) — one shared mailcow
- * instance hosts mailboxes/aliases for every customer domain with email
- * turned on. JSON, auth via a single `X-API-Key` header.
+ * instance hosts mailboxes/aliases for every customer domain across every
+ * Talivio product. JSON, auth via a single `X-API-Key` header.
  *
- * mailcow answers HTTP 200 even for a failed write — errors show up as
+ * ⚠️ mailcow answers HTTP 200 even for a failed write — errors show up as
  * `[{"type":"error","msg":[...]}]` in the body, not the status code, so
  * call() inspects the payload itself rather than trusting the status.
+ *
+ * ⚠️ Units are inconsistent on mailcow's side and this class does NOT
+ * paper over it: writes take megabytes (add/mailbox `quota`), reads give
+ * bytes (get/mailbox `quota`, `quota_used`). Method names say which —
+ * anything `…Mb` is megabytes, mailboxQuota() is bytes.
  *
  * ⚠️ Same IP-allowlist trap as Ploi/Namecheap/Cloudflare: "Allow from"
  * under mailcow's Configuration → Access → API must include the calling
@@ -31,7 +37,7 @@ class Mailcow implements Mail
     /**
      * @param  string|null  $mxHost  the hostname customer domains point their MX at
      * @param  string|null  $spfValue  the SPF TXT customer domains publish (e.g. "v=spf1 mx -all")
-     * @param  string  $description  what new domains are labelled with in the mailcow UI
+     * @param  string  $description  what new domains are labelled with when no MailOwner is given
      */
     public function __construct(
         protected string $baseUrl,
@@ -66,36 +72,83 @@ class Mailcow implements Mail
         return ['MAILCOW_URL', 'MAILCOW_API_KEY'];
     }
 
-    public function addDomain(string $domain, int $maxMailboxes = 10, int $maxQuotaMb = 10240): void
-    {
-        $domain = strtolower(trim($domain));
+    // ------------------------------------------------------------------
+    // Domains
+    // ------------------------------------------------------------------
+
+    public function addDomain(
+        string $domain,
+        int $maxMailboxes = 10,
+        int $maxQuotaMb = 10240,
+        bool $active = true,
+        ?MailOwner $owner = null,
+        ?int $defaultQuotaMb = null,
+        ?int $totalQuotaMb = null,
+        ?int $maxAliases = null,
+    ): void {
+        $domain = $this->normalize($domain);
 
         // mailcow's get endpoint returns an empty body (not a 404) for an
         // unknown domain, so the presence of "domain_name" is what tells
         // the two cases apart — and add/domain on an existing domain is
         // a "danger" reply, not a no-op, so the check has to come first.
-        $existing = $this->call('GET', "/api/v1/get/domain/{$domain}");
-
-        if (is_array($existing) && filled($existing['domain_name'] ?? null)) {
+        if ($this->domain($domain) !== null) {
             return;
         }
 
-        $this->call('POST', '/api/v1/add/domain', [
+        $payload = [
             'domain' => $domain,
-            'description' => $this->description,
-            'aliases' => 400,
+            'description' => $owner?->toDescription() ?? $this->description,
+            'aliases' => $maxAliases ?? 400,
             'mailboxes' => $maxMailboxes,
-            'defquota' => 1024,
+            'defquota' => $defaultQuotaMb ?? 1024,
             'maxquota' => $maxQuotaMb,
-            'quota' => $maxQuotaMb,
-            'active' => 1,
+            'quota' => $totalQuotaMb ?? $maxQuotaMb,
+            'active' => $active ? 1 : 0,
             'restart_sogo' => 1,
+        ];
+
+        $this->call('POST', '/api/v1/add/domain', $payload);
+    }
+
+    public function listDomains(): array
+    {
+        $result = $this->call('GET', '/api/v1/get/domain/all');
+
+        return is_array($result) ? array_values(array_filter($result, 'is_array')) : [];
+    }
+
+    public function domain(string $domain): ?array
+    {
+        $result = $this->call('GET', '/api/v1/get/domain/'.$this->normalize($domain));
+
+        if (! is_array($result) || blank($result['domain_name'] ?? null)) {
+            return null;
+        }
+
+        return $result;
+    }
+
+    public function setDomainActive(string $domain, bool $active): void
+    {
+        $this->call('POST', '/api/v1/edit/domain', [
+            'items' => [$this->normalize($domain)],
+            'attr' => ['active' => $active ? '1' : '0'],
         ]);
     }
 
+    public function deleteDomain(string $domain): void
+    {
+        $this->call('POST', '/api/v1/delete/domain', [$this->normalize($domain)], ignoreNotFound: true);
+    }
+
+    // ------------------------------------------------------------------
+    // DNS
+    // ------------------------------------------------------------------
+
     public function dkim(string $domain): ?array
     {
-        $result = $this->call('GET', '/api/v1/get/dkim/'.strtolower(trim($domain)));
+        $result = $this->call('GET', '/api/v1/get/dkim/'.$this->normalize($domain));
 
         if (! is_array($result) || blank($result['dkim_txt'] ?? null)) {
             return null;
@@ -109,7 +162,7 @@ class Mailcow implements Mail
 
     public function dnsRecords(string $domain): array
     {
-        $domain = strtolower(trim($domain));
+        $domain = $this->normalize($domain);
         $records = [];
 
         if (filled($this->mxHost)) {
@@ -131,35 +184,122 @@ class Mailcow implements Mail
         return $records;
     }
 
-    public function addMailbox(string $domain, string $localPart, string $password, string $name = ''): void
+    // ------------------------------------------------------------------
+    // Mailboxes
+    // ------------------------------------------------------------------
+
+    public function addMailbox(string $domain, string $localPart, string $password, string $name = '', ?int $quotaMb = null): void
     {
-        $this->call('POST', '/api/v1/add/mailbox', [
-            'local_part' => $localPart,
-            'domain' => strtolower(trim($domain)),
+        $payload = [
+            'local_part' => strtolower($localPart),
+            'domain' => $this->normalize($domain),
             'name' => $name !== '' ? $name : $localPart,
             'password' => $password,
             'password2' => $password,
-            'quota' => 1024,
             'active' => 1,
+        ];
+
+        if ($quotaMb !== null) {
+            $payload['quota'] = $quotaMb;
+        }
+
+        $this->call('POST', '/api/v1/add/mailbox', $payload);
+    }
+
+    public function mailbox(string $email): ?array
+    {
+        $result = $this->call('GET', '/api/v1/get/mailbox/'.strtolower(trim($email)));
+
+        if (! is_array($result) || blank($result['username'] ?? null)) {
+            return null;
+        }
+
+        return $result;
+    }
+
+    public function updateMailbox(string $email, array $changes): void
+    {
+        $attr = [];
+
+        if (isset($changes['password'])) {
+            $attr['password'] = $changes['password'];
+            $attr['password2'] = $changes['password'];
+        }
+
+        if (isset($changes['name'])) {
+            $attr['name'] = $changes['name'];
+        }
+
+        if (isset($changes['quota_mb'])) {
+            $attr['quota'] = (int) $changes['quota_mb'];
+        }
+
+        if (isset($changes['active'])) {
+            $attr['active'] = $changes['active'] ? '1' : '0';
+        }
+
+        if ($attr === []) {
+            return;
+        }
+
+        $this->call('POST', '/api/v1/edit/mailbox', [
+            'items' => [strtolower(trim($email))],
+            'attr' => $attr,
         ]);
+    }
+
+    public function setMailboxesActive(array $emails, bool $active): void
+    {
+        $emails = array_values(array_filter(array_map(fn ($e) => strtolower(trim((string) $e)), $emails)));
+
+        if ($emails === []) {
+            return;
+        }
+
+        $this->call('POST', '/api/v1/edit/mailbox', [
+            'items' => $emails,
+            'attr' => ['active' => $active ? '1' : '0'],
+        ]);
+    }
+
+    public function mailboxQuota(string $email): array
+    {
+        $mailbox = $this->mailbox($email);
+
+        if ($mailbox === null) {
+            return ['used' => 0, 'total' => 0, 'percent' => 0.0];
+        }
+
+        $used = (int) ($mailbox['quota_used'] ?? 0);
+        $total = (int) ($mailbox['quota'] ?? 0);
+
+        return [
+            'used' => $used,
+            'total' => $total,
+            'percent' => $total > 0 ? round($used / $total * 100, 1) : 0.0,
+        ];
     }
 
     public function deleteMailbox(string $email): void
     {
-        $this->call('POST', '/api/v1/delete/mailbox', [$email]);
+        $this->call('POST', '/api/v1/delete/mailbox', [strtolower(trim($email))], ignoreNotFound: true);
     }
 
     public function listMailboxes(string $domain): array
     {
-        $result = $this->call('GET', '/api/v1/get/mailbox/all/'.strtolower(trim($domain)));
+        $result = $this->call('GET', '/api/v1/get/mailbox/all/'.$this->normalize($domain));
 
-        return is_array($result) ? array_values($result) : [];
+        return is_array($result) ? array_values(array_filter($result, 'is_array')) : [];
     }
+
+    // ------------------------------------------------------------------
+    // Aliases
+    // ------------------------------------------------------------------
 
     public function addAlias(string $address, string $goto): void
     {
         $this->call('POST', '/api/v1/add/alias', [
-            'address' => $address,
+            'address' => strtolower(trim($address)),
             'goto' => $goto,
             'active' => 1,
         ]);
@@ -173,31 +313,121 @@ class Mailcow implements Mail
      */
     public function deleteAlias(string $address): void
     {
-        $domain = strtolower(substr(strrchr($address, '@') ?: '', 1));
+        $address = strtolower(trim($address));
+        $domain = (string) substr(strrchr($address, '@') ?: '', 1);
 
         foreach ($this->listAliases($domain) as $alias) {
             if (strcasecmp((string) ($alias['address'] ?? ''), $address) === 0 && filled($alias['id'] ?? null)) {
-                $this->call('POST', '/api/v1/delete/alias', [(string) $alias['id']]);
+                $this->deleteAliasById((int) $alias['id']);
 
                 return;
             }
         }
     }
 
-    /**
-     * Removes the domain and every mailbox/alias on it. "Does not exist"
-     * counts as success: the goal state either way is "not on mailcow".
-     */
-    public function deleteDomain(string $domain): void
+    public function deleteAliasById(int $aliasId): void
     {
-        $this->call('POST', '/api/v1/delete/domain', [strtolower(trim($domain))], ignoreNotFound: true);
+        $this->call('POST', '/api/v1/delete/alias', [(string) $aliasId], ignoreNotFound: true);
+    }
+
+    public function updateAlias(int $aliasId, array $changes): void
+    {
+        $attr = array_filter([
+            'address' => $changes['address'] ?? null,
+            'goto' => $changes['goto'] ?? null,
+        ], fn ($value) => $value !== null);
+
+        if (isset($changes['active'])) {
+            $attr['active'] = $changes['active'] ? '1' : '0';
+        }
+
+        if ($attr === []) {
+            return;
+        }
+
+        $this->call('POST', '/api/v1/edit/alias', [
+            'items' => [(string) $aliasId],
+            'attr' => $attr,
+        ]);
     }
 
     public function listAliases(string $domain): array
     {
-        $result = $this->call('GET', '/api/v1/get/alias/all/'.strtolower(trim($domain)));
+        $result = $this->call('GET', '/api/v1/get/alias/all/'.$this->normalize($domain));
 
-        return is_array($result) ? array_values($result) : [];
+        return is_array($result) ? array_values(array_filter($result, 'is_array')) : [];
+    }
+
+    public function countAliases(array $domains): int
+    {
+        $total = 0;
+
+        foreach ($domains as $domain) {
+            $total += count($this->listAliases((string) $domain));
+        }
+
+        return $total;
+    }
+
+    // ------------------------------------------------------------------
+    // Usage
+    // ------------------------------------------------------------------
+
+    public function resourceSummary(array $domains): array
+    {
+        $mailboxes = 0;
+        $aliases = 0;
+        $used = 0;
+        $quota = 0;
+
+        foreach ($domains as $domain) {
+            $domain = (string) $domain;
+            $rows = $this->listMailboxes($domain);
+
+            $mailboxes += count($rows);
+            $aliases += count($this->listAliases($domain));
+
+            foreach ($rows as $row) {
+                $used += (int) ($row['quota_used'] ?? 0);
+                $quota += (int) ($row['quota'] ?? 0);
+            }
+        }
+
+        return [
+            'mailboxes' => $mailboxes,
+            'aliases' => $aliases,
+            'used_bytes' => $used,
+            'quota_bytes' => $quota,
+            'usage_percent' => $quota > 0 ? round($used / $quota * 100, 1) : 0.0,
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Sync jobs
+    // ------------------------------------------------------------------
+
+    public function listSyncJobs(): array
+    {
+        $result = $this->call('GET', '/api/v1/get/syncjobs/all/no_passwords');
+
+        return is_array($result) ? array_values(array_filter($result, 'is_array')) : [];
+    }
+
+    public function addSyncJob(array $job): void
+    {
+        $this->call('POST', '/api/v1/add/syncjob', $job);
+    }
+
+    public function deleteSyncJob(int $jobId): void
+    {
+        $this->call('POST', '/api/v1/delete/syncjob', [(string) $jobId], ignoreNotFound: true);
+    }
+
+    // ------------------------------------------------------------------
+
+    protected function normalize(string $domain): string
+    {
+        return strtolower(trim($domain));
     }
 
     /**

@@ -571,7 +571,7 @@ being copied into each product.
 | `Infra\Contracts\Registrar` | Namecheap (default), Openprovider | availability + quote, register, renew, transfer in, nameservers, transfer lock |
 | `Infra\Contracts\Dns` | Cloudflare | zone per customer domain, apex/www records, arbitrary record upserts, zone lookup by suffix |
 | `Infra\Contracts\Host` | Ploi | attach a domain to the product's site, request/poll its certificate; create/delete whole sites for ops |
-| `Infra\Contracts\Mail` | mailcow | domains, mailboxes, forwarding aliases, the MX/SPF/DKIM records a domain needs |
+| `Infra\Contracts\Mail` | mailcow | domains, mailboxes, forwarding aliases, quota and usage, the MX/SPF/DMARC/DKIM records a domain needs |
 
 Type-hint the contract and the package binds the configured driver. Missing
 credentials fail at resolution with a `NotConfiguredException` naming the
@@ -601,6 +601,25 @@ CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…                   # scoped to
 PLOI_API_TOKEN=… PLOI_SERVER_ID=… PLOI_SITE_ID=…                 # PLOI_ATTACH_MODE=tenant|alias — pick once, never switch
 MAILCOW_URL=… MAILCOW_API_KEY=… MAILCOW_MX_HOST=… MAILCOW_SPF_VALUE=…
 ```
+
+One mailcow instance serves every product, so a mail domain says who owns
+it in the host's own description field:
+
+```php
+use Talivio\Sdk\Infra\Support\MailOwner;
+
+$mail->addDomain($domain, active: false, owner: new MailOwner('mailio', "company-{$company->id}", $company->name));
+$mail->setDomainActive($domain, true);        // once the DNS proof lands
+
+MailOwner::fromDescription($row['description']);   // null = legacy/unknown, NOT unowned
+```
+
+A domain is created switched **off** whenever ownership isn't proven yet:
+mailcow treats a local domain as authoritative and would otherwise swallow
+mail belonging to its real owner. Mailio is the owner-of-record for mail
+packages across all products; other products should route domain and
+mailbox lifecycle through it rather than editing the shared instance
+directly.
 
 Things every driver's docblock repeats because they cost real time to learn:
 Namecheap sends `ClientIp` with every call and the IP must be whitelisted on

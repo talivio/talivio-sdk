@@ -4,6 +4,28 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.26.0 — 2026-09-05
+
+- **`Mail` grows to the full mail-host admin surface**, because Mailio is now
+  the owner-of-record for every mail package Talivio sells in any product
+  (2026-09-05 decision) and it needs more than "add a domain, add a mailbox":
+  `listDomains`, `domain`, `setDomainActive`, `mailbox`, `updateMailbox`,
+  `setMailboxesActive`, `mailboxQuota`, `resourceSummary`, `deleteAliasById`,
+  `updateAlias`, `countAliases`, and the sync-job trio used to migrate a
+  customer's mail in from their old provider. `addDomain` gains `active`,
+  `owner`, `defaultQuotaMb`, `totalQuotaMb` and `maxAliases`; `addMailbox`
+  gains `quotaMb`. Every addition is optional and positional-safe, so the
+  calls Contentio and talivio.com already make are unchanged.
+- **`MailOwner` stamps ownership into the mail host itself** (`Acme Ltd
+  [mailio:company-7]` in mailcow's description field). One instance serves
+  every product; before this, "who owns this domain?" could only be answered
+  by querying each product's database in turn, and a domain outliving its
+  product became unattributable. A description with no tag parses to null,
+  which means "unknown/legacy" — never "unowned, safe to delete".
+- `addDomain(active: false)` creates a domain switched OFF, for the
+  provable-ownership flow: mailcow treats a local domain as authoritative
+  and would otherwise swallow mail belonging to its real owner.
+
 ## 1.25.2 — 2026-09-05
 
 - An Infra contract now RESOLVES in an environment without credentials —
