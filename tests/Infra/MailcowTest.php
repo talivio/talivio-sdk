@@ -8,6 +8,7 @@ use RuntimeException;
 use Talivio\Sdk\Infra\Clients\Mailcow;
 use Talivio\Sdk\Infra\Contracts\Mail;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\UnconfiguredMail;
 use Talivio\Sdk\Tests\TestCase;
 
 class MailcowTest extends TestCase
@@ -37,16 +38,20 @@ class MailcowTest extends TestCase
         $this->assertInstanceOf(Mailcow::class, $this->app->make(Mail::class));
     }
 
-    public function test_an_unconfigured_mail_host_fails_at_resolution(): void
+    public function test_an_unconfigured_mail_host_resolves_but_fails_on_use(): void
     {
         config(['talivio.infra.mailcow.api_key' => null]);
 
         $this->assertNull(Mailcow::fromConfig());
 
+        $mail = $this->app->make(Mail::class);
+
+        $this->assertInstanceOf(UnconfiguredMail::class, $mail);
+
         $this->expectException(NotConfiguredException::class);
         $this->expectExceptionMessage('MAILCOW_API_KEY');
 
-        $this->app->make(Mail::class);
+        $mail->addDomain('myshop.com');
     }
 
     public function test_add_domain_sends_the_api_key_header_and_the_quota_shape(): void

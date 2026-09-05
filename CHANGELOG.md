@@ -4,6 +4,16 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.25.2 — 2026-09-05
+
+- An Infra contract now RESOLVES in an environment without credentials —
+  it binds to an `Unconfigured*` stand-in whose every call throws
+  `NotConfiguredException` naming the missing variables. Failing at
+  resolution broke every controller that constructor-injects a contract
+  (Shops' domain pages 500ed on a server whose `.env` has no registrar
+  keys). Asking for the concrete class (`app(Namecheap::class)`) still
+  fails at once.
+
 ## 1.25.1 — 2026-09-05
 
 - mailcow: `deleteAlias()` looks the alias's numeric id up first — mailcow's

@@ -38,6 +38,10 @@ use Talivio\Sdk\Infra\Contracts\Host;
 use Talivio\Sdk\Infra\Contracts\Mail;
 use Talivio\Sdk\Infra\Contracts\Registrar;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\UnconfiguredDns;
+use Talivio\Sdk\Infra\Support\UnconfiguredHost;
+use Talivio\Sdk\Infra\Support\UnconfiguredMail;
+use Talivio\Sdk\Infra\Support\UnconfiguredRegistrar;
 use Talivio\Sdk\Ingest\IngestClient;
 use Talivio\Sdk\Ingest\TalivioOps;
 use Throwable;
@@ -82,38 +86,46 @@ class TalivioServiceProvider extends ServiceProvider
      * modeli, faturalama ve UI kalır.
      *
      * Sözleşmeler `talivio.infra.{registrar,dns,host,mail}` sürücü adına
-     * göre bağlanır. Kimlik bilgisi eksikse çözümleme anında
-     * NotConfiguredException — bir ürün "yapılandırılmamış" durumunu
-     * göstermek isterse somut sınıfın `fromConfig()`'ini kullanır (null
-     * döner). Ürün kendi bağlamasını yaparsa (ör. testte Fake*) o kazanır:
-     * `bind` sırası ürünün service provider'ında sonradır.
+     * göre bağlanır. Kimlik bilgisi eksikse SÖZLEŞME yine çözümlenir ama
+     * her çağrıda eksik env değişkenini adıyla söyleyen
+     * NotConfiguredException fırlatan bir vekile (Unconfigured*) bağlanır:
+     * constructor'dan enjekte eden bir controller yapılandırılmamış
+     * ortamda da kurulabilmeli (2026-09-05: Shops canlıda anahtarlar
+     * yokken çözümleme anında patlayınca alan adı sayfaları 500 verdi).
+     * SOMUT sınıf (`app(Namecheap::class)`) ise çözümleme anında fırlatır
+     * — onu isteyen özellikle onu istiyordur. "Yapılandırılmamış"
+     * durumunu göstermek isteyen ürün `Namecheap::fromConfig()` (null)
+     * kullanır. Ürün kendi bağlamasını yaparsa (ör. testte Fake*) o
+     * kazanır: `bind` sırası ürünün service provider'ında sonradır.
      */
     private function registerInfra(): void
     {
         $drivers = [
-            Registrar::class => ['talivio.infra.registrar', [
+            Registrar::class => ['talivio.infra.registrar', UnconfiguredRegistrar::class, [
                 Namecheap::NAME => Namecheap::class,
                 Openprovider::NAME => Openprovider::class,
             ]],
-            Dns::class => ['talivio.infra.dns', [Cloudflare::NAME => Cloudflare::class]],
-            Host::class => ['talivio.infra.host', [Ploi::NAME => Ploi::class]],
-            Mail::class => ['talivio.infra.mail', [Mailcow::NAME => Mailcow::class]],
+            Dns::class => ['talivio.infra.dns', UnconfiguredDns::class, [Cloudflare::NAME => Cloudflare::class]],
+            Host::class => ['talivio.infra.host', UnconfiguredHost::class, [Ploi::NAME => Ploi::class]],
+            Mail::class => ['talivio.infra.mail', UnconfiguredMail::class, [Mailcow::NAME => Mailcow::class]],
         ];
 
-        foreach ($drivers as $contract => [$configKey, $implementations]) {
+        foreach ($drivers as $contract => [$configKey, $unconfigured, $implementations]) {
             foreach ($implementations as $class) {
                 $this->app->bind($class, fn () => $class::fromConfig()
                     ?? throw NotConfiguredException::forService($class::NAME, $class::requiredEnv()));
             }
 
-            $this->app->bind($contract, function ($app) use ($configKey, $implementations) {
+            $this->app->bind($contract, function () use ($configKey, $unconfigured, $implementations) {
                 $driver = (string) config($configKey, array_key_first($implementations));
 
                 if (! isset($implementations[$driver])) {
                     throw new InvalidArgumentException("Unknown {$configKey} driver \"{$driver}\" — expected one of: ".implode(', ', array_keys($implementations)).'.');
                 }
 
-                return $app->make($implementations[$driver]);
+                $class = $implementations[$driver];
+
+                return $class::fromConfig() ?? new $unconfigured($class::NAME, $class::requiredEnv());
             });
         }
     }

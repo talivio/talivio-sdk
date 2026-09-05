@@ -9,6 +9,7 @@ use RuntimeException;
 use Talivio\Sdk\Infra\Clients\Ploi;
 use Talivio\Sdk\Infra\Contracts\Host;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\UnconfiguredHost;
 use Talivio\Sdk\Tests\TestCase;
 
 class PloiTest extends TestCase
@@ -48,14 +49,18 @@ class PloiTest extends TestCase
         $this->assertInstanceOf(Ploi::class, $this->app->make(Host::class));
     }
 
-    public function test_an_unconfigured_host_fails_at_resolution(): void
+    public function test_an_unconfigured_host_resolves_but_fails_on_use(): void
     {
         config(['talivio.infra.ploi.api_token' => null]);
+
+        $host = $this->app->make(Host::class);
+
+        $this->assertInstanceOf(UnconfiguredHost::class, $host);
 
         $this->expectException(NotConfiguredException::class);
         $this->expectExceptionMessage('PLOI_API_TOKEN');
 
-        $this->app->make(Host::class);
+        $host->serverIp();
     }
 
     public function test_the_site_id_is_only_required_for_platform_site_calls(): void

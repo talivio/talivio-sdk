@@ -8,6 +8,7 @@ use RuntimeException;
 use Talivio\Sdk\Infra\Clients\Cloudflare;
 use Talivio\Sdk\Infra\Contracts\Dns;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\UnconfiguredDns;
 use Talivio\Sdk\Tests\TestCase;
 
 class CloudflareTest extends TestCase
@@ -48,16 +49,21 @@ class CloudflareTest extends TestCase
         $this->assertInstanceOf(Cloudflare::class, $this->app->make(Dns::class));
     }
 
-    public function test_an_unconfigured_provider_fails_at_resolution(): void
+    public function test_an_unconfigured_provider_resolves_but_fails_on_use(): void
     {
         config(['talivio.infra.cloudflare.api_token' => null]);
 
         $this->assertNull(Cloudflare::fromConfig());
 
+        $dns = $this->app->make(Dns::class);
+
+        $this->assertInstanceOf(UnconfiguredDns::class, $dns);
+        $this->assertFalse($dns->verifyCredentials());
+
         $this->expectException(NotConfiguredException::class);
         $this->expectExceptionMessage('CLOUDFLARE_API_TOKEN');
 
-        $this->app->make(Dns::class);
+        $dns->ensureZone('myshop.com');
     }
 
     public function test_ensure_zone_returns_an_existing_zone_without_creating_one(): void

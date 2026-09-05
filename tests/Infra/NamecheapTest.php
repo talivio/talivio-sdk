@@ -11,6 +11,7 @@ use Talivio\Sdk\Infra\Clients\Namecheap;
 use Talivio\Sdk\Infra\Contracts\Registrar;
 use Talivio\Sdk\Infra\Exceptions\AuthCodeUnavailableException;
 use Talivio\Sdk\Infra\Exceptions\NotConfiguredException;
+use Talivio\Sdk\Infra\Support\UnconfiguredRegistrar;
 use Talivio\Sdk\Tests\TestCase;
 
 /**
@@ -118,16 +119,32 @@ class NamecheapTest extends TestCase
         $this->assertInstanceOf(Namecheap::class, $this->app->make(Registrar::class));
     }
 
-    public function test_an_unconfigured_registrar_fails_at_resolution_naming_the_env_keys(): void
+    /**
+     * The contract still resolves without credentials (a controller that
+     * injects it must build); the first CALL fails naming the env keys.
+     * Asking for the concrete class is different — that fails at once.
+     */
+    public function test_an_unconfigured_registrar_resolves_but_fails_on_use_naming_the_env_keys(): void
     {
         config(['talivio.infra.namecheap.api_key' => null]);
 
         $this->assertNull(Namecheap::fromConfig());
 
+        $registrar = $this->app->make(Registrar::class);
+
+        $this->assertInstanceOf(UnconfiguredRegistrar::class, $registrar);
+
+        try {
+            $this->app->make(Namecheap::class);
+            $this->fail('The concrete client should not be built without credentials.');
+        } catch (NotConfiguredException $e) {
+            $this->assertStringContainsString('NAMECHEAP_API_KEY', $e->getMessage());
+        }
+
         $this->expectException(NotConfiguredException::class);
         $this->expectExceptionMessage('NAMECHEAP_API_KEY');
 
-        $this->app->make(Registrar::class);
+        $registrar->checkAvailability('myshop.com');
     }
 
     public function test_the_quoted_price_is_the_accounts_own_price_plus_talivios_margin(): void
