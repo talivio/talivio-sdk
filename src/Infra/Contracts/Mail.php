@@ -111,6 +111,18 @@ interface Mail
     public function setDomainActive(string $domain, bool $active): void;
 
     /**
+     * Re-stamps who a domain belongs to, without touching anything else
+     * about it. This is how a domain created before the convention gets
+     * attributed, and how one is handed from one owner to another.
+     *
+     * The wire format stays inside the package: callers pass a MailOwner,
+     * never a hand-built description string.
+     *
+     * @throws RuntimeException on any host-side failure
+     */
+    public function setDomainOwner(string $domain, MailOwner $owner): void;
+
+    /**
      * Removes the domain and every mailbox/alias on it, so a future
      * unrelated owner of the domain can never receive mail meant for an
      * address the previous customer set up. Idempotent: a domain that's

@@ -110,6 +110,17 @@ class FakeMail implements Mail
         }
     }
 
+    public function setDomainOwner(string $domain, MailOwner $owner): void
+    {
+        $this->guard();
+
+        $domain = $this->normalize($domain);
+
+        if (isset($this->domains[$domain])) {
+            $this->domains[$domain]['description'] = $owner->toDescription();
+        }
+    }
+
     public function deleteDomain(string $domain): void
     {
         $this->guard();

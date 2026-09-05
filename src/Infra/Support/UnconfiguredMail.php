@@ -45,6 +45,11 @@ final class UnconfiguredMail implements Mail
         throw $this->exception();
     }
 
+    public function setDomainOwner(string $domain, MailOwner $owner): void
+    {
+        throw $this->exception();
+    }
+
     public function deleteDomain(string $domain): void
     {
         throw $this->exception();

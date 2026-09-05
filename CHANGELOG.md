@@ -4,6 +4,14 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.27.0 - 2026-09-05
+
+- **`Mail::setDomainOwner()`** re-stamps who a domain belongs to without
+  touching anything else about it. Needed to attribute domains created
+  before the convention existed, and to hand one owner's domain to another.
+  The wire format stays inside the package: callers pass a `MailOwner`,
+  never a hand-built description string.
+
 ## 1.26.2 - 2026-09-05
 
 - **`HostRefusedException`** separates "the vendor answered NO" from "the

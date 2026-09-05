@@ -138,6 +138,14 @@ class Mailcow implements Mail
         ]);
     }
 
+    public function setDomainOwner(string $domain, MailOwner $owner): void
+    {
+        $this->call('POST', '/api/v1/edit/domain', [
+            'items' => [$this->normalize($domain)],
+            'attr' => ['description' => $owner->toDescription()],
+        ]);
+    }
+
     public function deleteDomain(string $domain): void
     {
         $this->call('POST', '/api/v1/delete/domain', [$this->normalize($domain)], ignoreNotFound: true);

@@ -299,6 +299,20 @@ class MailcowTest extends TestCase
         Http::assertSent(fn (Request $request) => $request['items'] === ['myshop.com'] && $request['attr'] === ['active' => '1']);
     }
 
+    /**
+     * How a domain created before the ownership convention gets attributed,
+     * and how one is handed over. Nothing but the description is touched.
+     */
+    public function test_set_domain_owner_rewrites_only_the_description(): void
+    {
+        Http::fake([self::API.'/edit/domain' => Http::response([['type' => 'success', 'msg' => 'domain_modified']])]);
+
+        $this->mail()->setDomainOwner('MyShop.com', new MailOwner('ops', 'manual', 'myshop.com'));
+
+        Http::assertSent(fn (Request $request) => $request['items'] === ['myshop.com']
+            && $request['attr'] === ['description' => 'myshop.com [ops:manual]']);
+    }
+
     public function test_domain_returns_null_for_a_domain_the_host_does_not_have(): void
     {
         Http::fake([
