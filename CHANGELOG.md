@@ -4,6 +4,29 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.28.1 - 2026-09-05
+
+- Documents 1.28.0 in the README and this file; no code change. (The 1.28.0
+  tag shipped the code without its documentation.)
+
+## 1.28.0 - 2026-09-05
+
+- **`ProductMail` — the contract a product should actually use for mail.**
+  It goes through Mailio's server-to-server API, which is the owner-of-record
+  for every mail package Talivio sells, and scopes every call to the calling
+  product's own customers. `Mail` stays the raw shared mailcow instance,
+  which reaches domains no product owns (25 hand-run customer domains and 118
+  mailboxes live there) and is now documented as being for Mailio and ops
+  tooling only.
+- `Clients\MailioGateway` implements it over HTTP, `Testing\FakeProductMail`
+  in memory — enforcing the same rules the gateway does, so a product test
+  cannot pass on a flow production refuses — and
+  `Support\UnconfiguredProductMail` keeps resolution working without a key.
+- Identity is the credential: there is no "which product am I" argument in
+  the surface, so a compromised product cannot impersonate another. Reads
+  retry on 5xx, writes never do — a resent create could charge a plan slot
+  twice or resurrect an address the customer just deleted.
+
 ## 1.27.0 - 2026-09-05
 
 - **`Mail::setDomainOwner()`** re-stamps who a domain belongs to without

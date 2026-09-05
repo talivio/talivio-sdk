@@ -571,7 +571,8 @@ being copied into each product.
 | `Infra\Contracts\Registrar` | Namecheap (default), Openprovider | availability + quote, register, renew, transfer in, nameservers, transfer lock |
 | `Infra\Contracts\Dns` | Cloudflare | zone per customer domain, apex/www records, arbitrary record upserts, zone lookup by suffix |
 | `Infra\Contracts\Host` | Ploi | attach a domain to the product's site, request/poll its certificate; create/delete whole sites for ops |
-| `Infra\Contracts\Mail` | mailcow | domains, mailboxes, forwarding aliases, quota and usage, the MX/SPF/DMARC/DKIM records a domain needs |
+| `Infra\Contracts\ProductMail` | Mailio | **what a product uses for mail** — provision domains, mailboxes and aliases for its own customers, scoped to them |
+| `Infra\Contracts\Mail` | mailcow | the raw shared mail host: domains, mailboxes, aliases, quota and usage, the MX/SPF/DMARC/DKIM records a domain needs. Mailio and ops tooling only |
 
 Type-hint the contract and the package binds the configured driver. Missing
 credentials fail at resolution with a `NotConfiguredException` naming the
@@ -601,6 +602,31 @@ CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…                   # scoped to
 PLOI_API_TOKEN=… PLOI_SERVER_ID=… PLOI_SITE_ID=…                 # PLOI_ATTACH_MODE=tenant|alias — pick once, never switch
 MAILCOW_URL=… MAILCOW_API_KEY=… MAILCOW_MX_HOST=… MAILCOW_SPF_VALUE=…
 ```
+
+**Mail has two layers, and a product wants the upper one.**
+`Infra\Contracts\ProductMail` goes through Mailio, which is the
+owner-of-record for every mail package Talivio sells; every call is scoped to
+the calling product's own customers. `Infra\Contracts\Mail` is the raw shared
+mailcow instance and reaches domains no product owns — it is for Mailio
+itself and for ops tooling.
+
+```php
+use Talivio\Sdk\Infra\Contracts\ProductMail;
+
+public function __construct(private ProductMail $mail) {}
+
+$this->mail->createDomain("site-{$site->id}", $domain, ['label' => $site->name, 'mailboxes' => 10]);
+foreach ($this->mail->dnsRecords($domain) as $record) { /* show, or publish via Dns */ }
+$this->mail->verifyDomain($domain);        // once the ownership TXT is live
+$this->mail->createMailbox($domain, 'info', $password);
+```
+
+The key is issued by Mailio (`php artisan mailio:mail-key <product>`) and goes
+in the product's `.env` as `TALIVIO_MAIL_KEY`. There is no "which product am
+I" argument anywhere in the surface: the key answers that, so a compromised
+product cannot act as another. Bind `Infra\Testing\FakeProductMail` in tests —
+it enforces the same rules the gateway does, so a test cannot pass on a flow
+production refuses.
 
 One mailcow instance serves every product, so a mail domain says who owns
 it in the host's own description field:
