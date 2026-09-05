@@ -39,8 +39,12 @@ Decisions worth not re-deriving:
   first-year promo (renewals reuse the purchase price). Contentio's search
   and checkout now show this (previously the raw register price).
 - Namecheap sends `ClientIp` and rejects unlisted IPs (1011102/1011150);
-  Ploi tokens and mailcow have IP allowlists too. One server, one outbound
-  IP (`esiteks.talivio.com`), so one allowlist entry covers every product.
+  Ploi tokens and mailcow have IP allowlists too. One server
+  (`esiteks.talivio.com`), one outbound IPv4 — **confirmed 2026-09-05:
+  `31.220.77.127`** (checked both from the `talivio` app user and directly
+  on the host; both agree) — so one allowlist entry per service (Namecheap
+  ClientIp whitelist, Ploi token's IP allowlist, mailcow's "Allow from")
+  covers every product that will ever call these clients.
 
 Live state seen 2026-09-05 (env key NAMES only): Shops has **no**
 NAMECHEAP/CLOUDFLARE/PLOI keys (contradicting the Shops memory that said the
