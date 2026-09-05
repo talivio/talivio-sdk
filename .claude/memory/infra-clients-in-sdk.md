@@ -93,3 +93,12 @@ instance that no product's database knows about. Consequences: (a) the
 genuinely dangerous here, (b) before any product is wired to manage this
 instance those 25 domains need attributing — only Eren knows who owns them,
 (c) a backfill of `MailOwner` tags is the natural first step.
+
+**Backfill tool (2026-09-05):** `php artisan mailio:mail-owners` on
+mailio.talivio.com audits every domain of the shared instance and, with
+`--apply`, stamps an owner tag. Read-only by default; never deletes or
+deactivates; only edits the description; idempotent; `--claim=product:ref`
+(default `ops:manual`), `--only=`, `--retag`. It cannot run until Mailio's
+`.env` gets `MAILCOW_URL` (INSTANCE root) + `MAILCOW_API_KEY` — Mailio's old
+block used `MAILCOW_API_URL` = the API root, so the value changes shape, not
+just the key name.
