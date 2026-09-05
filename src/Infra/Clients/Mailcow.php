@@ -68,8 +68,20 @@ class Mailcow implements Mail
 
     public function addDomain(string $domain, int $maxMailboxes = 10, int $maxQuotaMb = 10240): void
     {
+        $domain = strtolower(trim($domain));
+
+        // mailcow's get endpoint returns an empty body (not a 404) for an
+        // unknown domain, so the presence of "domain_name" is what tells
+        // the two cases apart — and add/domain on an existing domain is
+        // a "danger" reply, not a no-op, so the check has to come first.
+        $existing = $this->call('GET', "/api/v1/get/domain/{$domain}");
+
+        if (is_array($existing) && filled($existing['domain_name'] ?? null)) {
+            return;
+        }
+
         $this->call('POST', '/api/v1/add/domain', [
-            'domain' => strtolower(trim($domain)),
+            'domain' => $domain,
             'description' => $this->description,
             'aliases' => 400,
             'mailboxes' => $maxMailboxes,
@@ -107,6 +119,10 @@ class Mailcow implements Mail
         if (filled($this->spfValue)) {
             $records[] = ['type' => 'TXT', 'name' => $domain, 'content' => (string) $this->spfValue];
         }
+
+        // Quarantine rather than reject: a customer's first mis-sent
+        // newsletter shouldn't bounce outright while they learn the setup.
+        $records[] = ['type' => 'TXT', 'name' => "_dmarc.{$domain}", 'content' => "v=DMARC1; p=quarantine; rua=mailto:postmaster@{$domain}"];
 
         if ($dkim = $this->dkim($domain)) {
             $records[] = ['type' => 'TXT', 'name' => $dkim['selector'].'._domainkey.'.$domain, 'content' => $dkim['record']];
@@ -149,9 +165,32 @@ class Mailcow implements Mail
         ]);
     }
 
+    /**
+     * Unlike a mailbox (whose mailcow primary key IS its address), an
+     * alias has its own autoincrement id and delete/alias wants that id,
+     * not the address — confirmed live in Shops 2026-08-30. Idempotent:
+     * an address with no matching alias is treated as already deleted.
+     */
     public function deleteAlias(string $address): void
     {
-        $this->call('POST', '/api/v1/delete/alias', [$address]);
+        $domain = strtolower(substr(strrchr($address, '@') ?: '', 1));
+
+        foreach ($this->listAliases($domain) as $alias) {
+            if (strcasecmp((string) ($alias['address'] ?? ''), $address) === 0 && filled($alias['id'] ?? null)) {
+                $this->call('POST', '/api/v1/delete/alias', [(string) $alias['id']]);
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * Removes the domain and every mailbox/alias on it. "Does not exist"
+     * counts as success: the goal state either way is "not on mailcow".
+     */
+    public function deleteDomain(string $domain): void
+    {
+        $this->call('POST', '/api/v1/delete/domain', [strtolower(trim($domain))], ignoreNotFound: true);
     }
 
     public function listAliases(string $domain): array
@@ -163,8 +202,9 @@ class Mailcow implements Mail
 
     /**
      * @param  array<int|string, mixed>  $body
+     * @param  bool  $ignoreNotFound  a "does not exist" reply counts as success (deletes)
      */
-    protected function call(string $method, string $path, array $body = []): mixed
+    protected function call(string $method, string $path, array $body = [], bool $ignoreNotFound = false): mixed
     {
         try {
             $response = $method === 'GET'
@@ -180,11 +220,22 @@ class Mailcow implements Mail
 
         $json = $response->json();
 
-        // Writes answer with a list of {type, msg} entries; the first one
-        // says whether it worked.
-        if (is_array($json) && isset($json[0]['type']) && in_array($json[0]['type'], ['error', 'danger'], true)) {
-            $msg = $json[0]['msg'] ?? 'unknown error';
+        // Writes answer with a list of {type, msg} entries. "danger" is a
+        // failure too (weak password, object already exists, quota
+        // exceeded) — treating only "error" as one lets those through.
+        $rows = is_array($json) && array_is_list($json) ? $json : [$json];
+
+        foreach ($rows as $row) {
+            if (! is_array($row) || ! in_array($row['type'] ?? null, ['error', 'danger'], true)) {
+                continue;
+            }
+
+            $msg = $row['msg'] ?? 'unknown error';
             $msg = is_array($msg) ? implode(' ', array_map('strval', $msg)) : (string) $msg;
+
+            if ($ignoreNotFound && (str_contains(strtolower($msg), 'does not exist') || str_contains(strtolower($msg), 'does_not_exist'))) {
+                continue;
+            }
 
             throw new RuntimeException("mailcow error: {$msg}");
         }

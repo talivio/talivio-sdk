@@ -26,6 +26,9 @@ class FakeMail implements Mail
     /** @var list<string> */
     public array $deletedAliases = [];
 
+    /** @var list<string> */
+    public array $deletedDomains = [];
+
     public string $dkimSelector = 'dkim';
 
     /** Null = the host has no key for any domain. */
@@ -65,11 +68,24 @@ class FakeMail implements Mail
             $records[] = ['type' => 'TXT', 'name' => $domain, 'content' => $this->spfValue];
         }
 
+        $records[] = ['type' => 'TXT', 'name' => "_dmarc.{$domain}", 'content' => "v=DMARC1; p=quarantine; rua=mailto:postmaster@{$domain}"];
+
         if ($dkim = $this->dkim($domain)) {
             $records[] = ['type' => 'TXT', 'name' => $dkim['selector'].'._domainkey.'.$domain, 'content' => $dkim['record']];
         }
 
         return $records;
+    }
+
+    public function deleteDomain(string $domain): void
+    {
+        $this->guard();
+
+        $domain = strtolower(trim($domain));
+        $this->deletedDomains[] = $domain;
+        unset($this->domains[$domain]);
+        $this->mailboxes = array_filter($this->mailboxes, fn ($mailbox) => $mailbox['domain'] !== $domain);
+        $this->aliases = array_filter($this->aliases, fn ($goto, $address) => ! str_ends_with($address, '@'.$domain), ARRAY_FILTER_USE_BOTH);
     }
 
     public function addMailbox(string $domain, string $localPart, string $password, string $name = ''): void

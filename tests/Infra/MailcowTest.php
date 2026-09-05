@@ -51,7 +51,10 @@ class MailcowTest extends TestCase
 
     public function test_add_domain_sends_the_api_key_header_and_the_quota_shape(): void
     {
-        Http::fake([self::API.'/add/domain' => Http::response([['type' => 'success', 'msg' => ['domain_added', 'myshop.com']]])]);
+        Http::fake([
+            self::API.'/get/domain/myshop.com' => Http::response([]),
+            self::API.'/add/domain' => Http::response([['type' => 'success', 'msg' => ['domain_added', 'myshop.com']]]),
+        ]);
 
         $this->mail()->addDomain('MyShop.com', maxMailboxes: 5, maxQuotaMb: 2048);
 
@@ -63,6 +66,19 @@ class MailcowTest extends TestCase
             && $request['mailboxes'] === 5
             && $request['maxquota'] === 2048
             && $request['active'] === 1);
+    }
+
+    /**
+     * add/domain on a domain mailcow already has is a "danger" reply, not
+     * a no-op — so the client looks first and skips the add.
+     */
+    public function test_add_domain_is_a_no_op_for_a_domain_mailcow_already_has(): void
+    {
+        Http::fake([self::API.'/get/domain/myshop.com' => Http::response(['domain_name' => 'myshop.com', 'active' => 1])]);
+
+        $this->mail()->addDomain('myshop.com');
+
+        Http::assertNotSent(fn (Request $request) => str_ends_with($request->url(), '/add/domain'));
     }
 
     /**
@@ -109,6 +125,7 @@ class MailcowTest extends TestCase
         $this->assertSame([
             ['type' => 'MX', 'name' => 'myshop.com', 'content' => 'mail.talivio.test', 'priority' => 10],
             ['type' => 'TXT', 'name' => 'myshop.com', 'content' => 'v=spf1 mx -all'],
+            ['type' => 'TXT', 'name' => '_dmarc.myshop.com', 'content' => 'v=DMARC1; p=quarantine; rua=mailto:postmaster@myshop.com'],
             ['type' => 'TXT', 'name' => 'dkim._domainkey.myshop.com', 'content' => 'v=DKIM1;k=rsa;p=ABC'],
         ], $this->mail()->dnsRecords('MyShop.com'));
     }
@@ -118,7 +135,50 @@ class MailcowTest extends TestCase
         config(['talivio.infra.mailcow.mx_host' => null, 'talivio.infra.mailcow.spf_value' => null]);
         Http::fake([self::API.'/get/dkim/myshop.com' => Http::response([])]);
 
-        $this->assertSame([], $this->mail()->dnsRecords('myshop.com'));
+        $this->assertSame(['_dmarc.myshop.com'], array_column($this->mail()->dnsRecords('myshop.com'), 'name'));
+    }
+
+    /**
+     * An alias's mailcow primary key is its numeric id, not its address
+     * (a mailbox's IS its address) — confirmed live in Shops 2026-08-30.
+     */
+    public function test_delete_alias_looks_the_id_up_first_and_is_idempotent(): void
+    {
+        Http::fake([
+            self::API.'/get/alias/all/myshop.com' => Http::response([
+                ['id' => 9, 'address' => 'hello@myshop.com', 'goto' => 'me@gmail.com'],
+            ]),
+            self::API.'/delete/alias' => Http::response([['type' => 'success', 'msg' => 'alias_removed']]),
+        ]);
+
+        $mail = $this->mail();
+        $mail->deleteAlias('Hello@myshop.com');
+        $mail->deleteAlias('gone@myshop.com');
+
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/delete/alias') && $request->data() === ['9']);
+        Http::assertSentCount(3); // lookup, delete, lookup (nothing to delete)
+    }
+
+    public function test_delete_domain_treats_an_unknown_domain_as_success(): void
+    {
+        // Http::fake() stubs accumulate (first match wins), so one
+        // callback answers per domain instead of three fakes.
+        Http::fake([self::API.'/delete/domain' => fn (Request $request) => match ($request->data()[0]) {
+            'myshop.com' => Http::response([['type' => 'success', 'msg' => ['domain_removed', 'myshop.com']]]),
+            'gone.com' => Http::response([['type' => 'danger', 'msg' => 'Domain does not exist']]),
+            default => Http::response([['type' => 'danger', 'msg' => 'access_denied']]),
+        }]);
+
+        $mail = $this->mail();
+        $mail->deleteDomain('myshop.com');
+        $mail->deleteDomain('gone.com');
+
+        Http::assertSent(fn (Request $request) => $request->data() === ['myshop.com']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('access_denied');
+
+        $mail->deleteDomain('locked.com');
     }
 
     public function test_add_mailbox_sends_the_password_twice_as_mailcow_wants(): void
@@ -134,18 +194,14 @@ class MailcowTest extends TestCase
             && $request['password2'] === 'correct horse battery');
     }
 
-    public function test_deletes_post_the_address_as_a_bare_list(): void
+    /** A mailbox's mailcow primary key IS its address — no lookup needed. */
+    public function test_delete_mailbox_posts_the_address_as_a_bare_list(): void
     {
-        Http::fake([
-            self::API.'/delete/mailbox' => Http::response([['type' => 'success', 'msg' => 'mailbox_removed']]),
-            self::API.'/delete/alias' => Http::response([['type' => 'success', 'msg' => 'alias_removed']]),
-        ]);
+        Http::fake([self::API.'/delete/mailbox' => Http::response([['type' => 'success', 'msg' => 'mailbox_removed']])]);
 
         $this->mail()->deleteMailbox('info@myshop.com');
-        $this->mail()->deleteAlias('hello@myshop.com');
 
         Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/delete/mailbox') && $request->data() === ['info@myshop.com']);
-        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/delete/alias') && $request->data() === ['hello@myshop.com']);
     }
 
     public function test_lists_return_the_hosts_rows(): void

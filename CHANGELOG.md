@@ -4,6 +4,14 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.25.1 — 2026-09-05
+
+- mailcow: `deleteAlias()` looks the alias's numeric id up first — mailcow's
+  delete/alias wants the id, not the address (Shops found this live on
+  2026-08-30); `addDomain()` checks for the domain before adding, since
+  add/domain on an existing domain is a "danger" reply rather than a no-op;
+  `dnsRecords()` now includes a DMARC record; new `Mail::deleteDomain()`.
+
 ## 1.25.0 — 2026-09-05
 
 - **Infrastructure clients** (`Talivio\Sdk\Infra`): the domain registrar,

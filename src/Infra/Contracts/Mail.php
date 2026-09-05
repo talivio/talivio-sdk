@@ -42,10 +42,20 @@ interface Mail
     public function dkim(string $domain): ?array;
 
     /**
+     * Removes the domain — and every mailbox and alias on it — from the
+     * mail host entirely, so a future unrelated owner of the domain can
+     * never receive mail meant for an address the previous customer set
+     * up. Idempotent: a domain that's already gone is success.
+     *
+     * @throws RuntimeException on any other host-side failure
+     */
+    public function deleteDomain(string $domain): void;
+
+    /**
      * Every DNS record the domain needs for mail to flow: MX to the mail
-     * host, the SPF TXT, and the DKIM TXT (when the host has a key).
-     * Names are fully qualified. Empty entries (an unconfigured MX host)
-     * are left out rather than emitted blank.
+     * host, the SPF TXT, a DMARC TXT, and the DKIM TXT (when the host
+     * has a key). Names are fully qualified. Empty entries (an
+     * unconfigured MX host) are left out rather than emitted blank.
      *
      * @return list<array{type: string, name: string, content: string, priority?: int}>
      *
