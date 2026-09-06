@@ -21,10 +21,20 @@ use Throwable;
  * Append edilirse çerez daha üretilmemiş olur ve harden_xsrf_cookie sessizce
  * hiçbir şey yapmaz (talivio.com bunu bir kez yaşadı).
  *
- * ⚠️ VAR OLAN BAŞLIK EZİLMEZ. Bu ürünlerin nginx'i zaten X-Frame-Options ve
- * X-Content-Type-Options gönderiyor; aynı başlığı bir de buradan yazmak
- * yinelenmiş başlık üretir ve bazı tarayıcılar yinelenen X-Frame-Options'ı
- * "ikisi de geçersiz" sayar.
+ * ⚠️ VAR OLAN BAŞLIK EZİLMEZ — CSP HARİÇ. Bu ürünlerin nginx'i zaten
+ * X-Frame-Options ve X-Content-Type-Options gönderiyor; aynı başlığı bir de
+ * buradan yazmak yinelenmiş başlık üretir ve bazı tarayıcılar yinelenen
+ * X-Frame-Options'ı "ikisi de geçersiz" sayar.
+ *
+ * ⚠️ CSP'yi ise EZER, ve bu bilinçli. İki farklı CSP aynı yanıtta bir tercih
+ * değil, bir çakışmadır; sessizce kaybeden taraf olmak en kötü sonuç. Dört
+ * Shopify uygulamamızda tam bu yaşandı: kyon147/laravel-shopify'ın
+ * IframeProtection'ı içeride kendi (yalnız frame-ancestors'lı, nonce'suz)
+ * politikasını yazıyor, bu middleware "başlık var" deyip çekiliyor ve sıkı
+ * politika hiç uygulanmıyordu — TCSR bulgusu da düzelmiş görünürken duruyordu.
+ * Bu middleware EN DIŞTA durduğu için son sözü onun söylemesi zaten tasarımın
+ * amacı. Kendi politikasını yazmak isteyen ürün `talivio.security.csp.enabled`
+ * ile bunu kapatır.
  *
  * ⚠️ X-Frame-Options BİLEREK HİÇ GÖNDERİLMİYOR. Clickjacking'i CSP'nin
  * frame-ancestors'ı karşılıyor ve o, XFO'nun anlatamadığı şeyi anlatabiliyor:
@@ -53,6 +63,10 @@ class SecurityHeaders
             }
         }
 
+        if ($this->csp->enabled()) {
+            $response->headers->set($this->csp->headerName(), $this->csp->header());
+        }
+
         $this->hardenXsrfCookie($response);
 
         return $response;
@@ -72,10 +86,6 @@ class SecurityHeaders
             'Permissions-Policy' => config('talivio.security.permissions_policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=()'),
             'X-Content-Type-Options' => config('talivio.security.content_type_options', true) ? 'nosniff' : null,
         ];
-
-        if ($this->csp->enabled()) {
-            $headers[$this->csp->headerName()] = $this->csp->header();
-        }
 
         return $headers;
     }

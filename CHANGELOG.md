@@ -4,6 +4,18 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.32.0 - 2026-09-06
+
+- **The middleware now sets the CSP unconditionally**, instead of yielding to a
+  header the response already carries. Four of our Shopify apps showed why: the
+  vendor package's `IframeProtection` sets a frame-ancestors-only, nonce-less
+  policy further in, so the migration looked done while the strict policy was
+  never applied and TCSR kept raising the same finding. Two policies on one
+  response are a conflict, and being outermost is what `prepend` is for. Every
+  other header still yields (nginx already sends some of them on these hosts).
+  A product that wants to own its policy sets
+  `talivio.security.csp.enabled` to false.
+
 ## 1.31.0 - 2026-09-06
 
 - Livewire gets the nonce too. Livewire renders its own `<script>` tags, so a

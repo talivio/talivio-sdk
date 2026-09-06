@@ -585,9 +585,21 @@ way back out it sees the finished response — including the `XSRF-TOKEN` cookie
 that `ValidateCsrfToken` queues. Appended, that cookie does not exist yet and
 `harden_xsrf_cookie` silently does nothing.
 
-The middleware never overwrites a header the response already carries: several
-of our sites have nginx sending `X-Frame-Options` and `X-Content-Type-Options`,
-and a duplicated `X-Frame-Options` is treated as invalid by some browsers. It
+The middleware never overwrites a header the response already carries — with
+one exception. Several of our sites have nginx sending `X-Frame-Options` and
+`X-Content-Type-Options`, and a duplicated `X-Frame-Options` is treated as
+invalid by some browsers.
+
+The exception is the CSP itself, which this middleware sets unconditionally.
+Two policies on one response are a conflict, not a preference, and silently
+losing that conflict is the worst outcome: in four of our Shopify apps the
+vendor package's `IframeProtection` sets its own (frame-ancestors-only,
+nonce-less) policy further in, and a middleware that yields to it looks
+migrated while shipping nothing. Being outermost is the whole point of
+`prepend`. A product that wants to own its own policy sets
+`talivio.security.csp.enabled` to false and writes it itself.
+
+It
 deliberately does **not** send `X-Frame-Options` at all — CSP `frame-ancestors`
 covers clickjacking and can say the one thing XFO cannot, which our Shopify
 embedded apps need: "allow `admin.shopify.com` to frame me".

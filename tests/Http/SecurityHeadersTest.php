@@ -20,6 +20,7 @@ class SecurityHeadersTest extends TestCase
             Route::get('/probe', fn () => 'ok');
             Route::get('/inline', fn () => Blade::render('<script @talivioNonce>1</script>'));
             Route::get('/preset', fn () => response('ok')->header('Referrer-Policy', 'no-referrer'));
+            Route::get('/rival', fn () => response('ok')->header('Content-Security-Policy', "frame-ancestors 'self' https://admin.shopify.com"));
         });
     }
 
@@ -52,6 +53,22 @@ class SecurityHeadersTest extends TestCase
     public function test_it_never_overwrites_a_header_the_response_already_carries(): void
     {
         $this->get('https://localhost/preset')->assertHeader('Referrer-Policy', 'no-referrer');
+    }
+
+    /**
+     * Bir başka middleware kendi CSP'sini yazdıysa, kazanan biz olmalıyız.
+     *
+     * Dört Shopify uygulamamızda vendor paketinin IframeProtection'ı tam bunu
+     * yapıyordu: içeride yalnız frame-ancestors'lı, nonce'suz bir politika
+     * yazıyor, bu middleware "başlık zaten var" deyip çekiliyordu — geçiş
+     * yapılmış görünürken sıkı politika hiç uygulanmıyordu.
+     */
+    public function test_the_sdk_policy_wins_over_a_policy_set_further_in(): void
+    {
+        $csp = $this->get('https://localhost/rival')->headers->get('Content-Security-Policy');
+
+        $this->assertStringContainsString("'nonce-", $csp);
+        $this->assertStringContainsString("default-src 'self'", $csp);
     }
 
     /**
