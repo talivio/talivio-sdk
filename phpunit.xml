@@ -7,6 +7,9 @@
          failOnWarning="true"
          failOnDeprecation="false">
     <testsuites>
+        <testsuite name="Http">
+            <directory>tests/Http</directory>
+        </testsuite>
         <testsuite name="Infra">
             <directory>tests/Infra</directory>
         </testsuite>

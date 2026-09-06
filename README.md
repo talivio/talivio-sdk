@@ -13,6 +13,8 @@ the Talivio platform:
   so every product stays visually consistent from one source.
 - **Human check** — behavioural bot protection for public forms, with no
   third-party service.
+- **Security response headers** — one nonce-based Content-Security-Policy for
+  every product, instead of a permissive copy per repository.
 - **Infrastructure clients** — Namecheap/Openprovider, Cloudflare, Ploi and
   mailcow behind four contracts, so a product provisions a customer domain
   without owning a single vendor integration.
@@ -558,6 +560,93 @@ human movement — throttling and email verification are the layers for that.
 Native mobile apps cannot use the web component; `HumanCheck::verify()` is
 transport-independent, so a client producing the same payload shape can be
 verified over an API.
+
+## Security response headers
+
+`Talivio\Sdk\Http\Middleware\SecurityHeaders` sends the response headers a
+hardened site is expected to send, with a **nonce-based** Content-Security-Policy.
+
+It exists because the permissive version had been copied into four products
+(`talivio.com`, `canopyproof`, `vatlio`, `restockio`) and was missing from the
+rest. On 2026-09-06 our own scanner (TCSR) dropped twelve `*.talivio.com` sites
+from A to C in one night on the same two findings — *"CSP allows scripts from
+any/broad origin"* and *"CSP allows 'unsafe-inline' scripts"*. A policy that
+lives in twelve places gets fixed in one of them.
+
+```php
+// bootstrap/app.php
+->withMiddleware(function (Middleware $middleware): void {
+    $middleware->web(prepend: [\Talivio\Sdk\Http\Middleware\SecurityHeaders::class]);
+})
+```
+
+**`prepend`, not `append`.** Prepended, the middleware is outermost, so on the
+way back out it sees the finished response — including the `XSRF-TOKEN` cookie
+that `ValidateCsrfToken` queues. Appended, that cookie does not exist yet and
+`harden_xsrf_cookie` silently does nothing.
+
+The middleware never overwrites a header the response already carries: several
+of our sites have nginx sending `X-Frame-Options` and `X-Content-Type-Options`,
+and a duplicated `X-Frame-Options` is treated as invalid by some browsers. It
+deliberately does **not** send `X-Frame-Options` at all — CSP `frame-ancestors`
+covers clickjacking and can say the one thing XFO cannot, which our Shopify
+embedded apps need: "allow `admin.shopify.com` to frame me".
+
+### The nonce
+
+Every inline `<script>` carries the request's nonce; nothing else runs.
+
+```blade
+<script @talivioNonce>
+    document.getElementById('x').hidden = true;
+</script>
+```
+
+`@vite(...)` needs no change — the middleware hands the nonce to Laravel's Vite
+helper before the response is built, so the generated tags get it themselves.
+The nonce is bound `scoped`, so it is regenerated for each request.
+
+### Adding what your product loads
+
+Two knobs, for two different needs. `sources` **adds** to a directive (what most
+products need); `directives` **replaces** one outright (when the default is
+simply wrong for this product).
+
+```php
+// config/talivio.php
+'security' => [
+    'csp' => [
+        'sources' => [
+            'script-src' => ['https://js.stripe.com'],
+            'frame-src' => ['https://www.youtube-nocookie.com'],
+        ],
+        // Shopify embedded app: it must be framable by the merchant's admin.
+        'directives' => [
+            'frame-ancestors' => ['https://admin.shopify.com', 'https://*.myshopify.com'],
+        ],
+    ],
+],
+```
+
+Every value also has a default **inside** the middleware, read through
+`config($key, $default)`. Products that published `config/talivio.php` before
+this section existed keep working without republishing it.
+
+### Rolling it out without breaking the site
+
+Set `TALIVIO_CSP_REPORT_ONLY=true` first: the policy is sent as
+`Content-Security-Policy-Report-Only`, nothing is blocked, and the browser
+console names every source you forgot. Flip it off once the console is quiet.
+
+`style-src` keeps `'unsafe-inline'` on purpose. Alpine (`x-show`), Livewire and
+many libraries write to `element.style`, which is governed by `style-src-attr`
+and cannot be signed with a nonce. Inline *style* does not carry the risk inline
+*script* does; `script-src` is where the policy is strict.
+
+`'strict-dynamic'` is opt-in (`TALIVIO_CSP_STRICT_DYNAMIC=true`). With it on,
+CSP3 browsers ignore the origin allowlist in `script-src` entirely, so every
+`<script src>` without a nonce goes silent. Turn it on per product, after its
+script tags are all nonced.
 
 ## Infrastructure clients (domains, DNS, hosting, mail)
 

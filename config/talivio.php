@@ -49,6 +49,59 @@ return [
     'deletion_behavior' => env('TALIVIO_DELETION_BEHAVIOR', 'delete'),
 
     /*
+     | Yanıt güvenlik başlıkları — Talivio\Sdk\Http\Middleware\SecurityHeaders.
+     |
+     | Middleware KENDİLİĞİNDEN DEVREYE GİRMEZ; ürün bootstrap/app.php'de
+     | `$middleware->web(prepend: [...SecurityHeaders::class])` diyerek ekler
+     | — append ile değil, çünkü yanıtı EN SON görmesi gerekiyor.
+     | Sebep: bazı ürünlerin nginx'i ya da önündeki CDN'i aynı başlıkları
+     | zaten yazıyor olabilir ve hangisinin kazanacağına paket karar veremez.
+     |
+     | ⚠️ Buradaki her değer middleware'in İÇİNDE de varsayılana sahip. Ürünler
+     | bu dosyayı yayınlamış (`config/talivio.php` kopyalamış) durumda, yani
+     | pakete eklenen yeni anahtar onların dosyasında YOKTUR — kod
+     | `config(..., $varsayilan)` ile okur ve eski kopyalar da çalışır.
+     */
+    'security' => [
+
+        'hsts' => env('TALIVIO_HSTS', 'max-age=31536000; includeSubDomains; preload'),
+        'referrer_policy' => env('TALIVIO_REFERRER_POLICY', 'strict-origin-when-cross-origin'),
+        'permissions_policy' => env('TALIVIO_PERMISSIONS_POLICY', 'geolocation=(), camera=(), microphone=(), payment=(), usb=()'),
+        'content_type_options' => env('TALIVIO_CONTENT_TYPE_OPTIONS', true),
+
+        // Blade formları CSRF jetonunu @csrf alanından alır; çerezi okumaya
+        // ihtiyaçları yoktur. Ama jetonu çerezden okuyan bir kurulum (axios'un
+        // varsayılanı) varsa bunu açmak tüm POST'ları 419'a düşürür.
+        'harden_xsrf_cookie' => env('TALIVIO_HARDEN_XSRF_COOKIE', false),
+
+        'csp' => [
+
+            'enabled' => env('TALIVIO_CSP_ENABLED', true),
+
+            // Bir ürüne ilk açarken true yapın: politika gönderilir ama
+            // uygulanmaz, eksik kaynaklar tarayıcı konsolunda görünür.
+            'report_only' => env('TALIVIO_CSP_REPORT_ONLY', false),
+
+            // Açıkken CSP3 tarayıcıları script-src'deki KÖKEN LİSTESİNİ yok
+            // sayar: nonce taşımayan her <script src> susar. Ürünün bütün
+            // script etiketleri nonce'a geçtikten sonra açın.
+            'strict_dynamic' => env('TALIVIO_CSP_STRICT_DYNAMIC', false),
+
+            'report_uri' => env('TALIVIO_CSP_REPORT_URI'),
+
+            // Bir yönergeye kaynak EKLER (çoğu ürünün ihtiyacı bu):
+            //   'script-src' => ['https://js.stripe.com'],
+            //   'style-src'  => ['https://fonts.googleapis.com'],
+            'sources' => [],
+
+            // Bir yönergeyi tamamen DEĞİŞTİRİR (varsayılanın doğru olmadığı
+            // hâller). Shopify gömülü uygulamaları için:
+            //   'frame-ancestors' => ['https://admin.shopify.com', 'https://*.myshopify.com'],
+            'directives' => [],
+        ],
+    ],
+
+    /*
      | Shared mail theme (talivio/sdk registers it automatically — see
      | TalivioServiceProvider::registerMailTheme()). Every Talivio product
      | sends the SAME looking mail: Talivio logo on the left, the PRODUCT

@@ -4,6 +4,36 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.30.0 - 2026-09-06
+
+- **`Http\Middleware\SecurityHeaders` + `Http\Security\Csp` — one
+  nonce-based Content-Security-Policy for every product.** The permissive
+  version had been copied into four products and was missing from the rest;
+  on 2026-09-06 TCSR dropped twelve `*.talivio.com` sites from A to C in one
+  night on the same two findings it raises against that policy shape.
+- The policy names no wildcard and no bare `https:`, and `script-src` carries
+  neither `'unsafe-inline'` nor `'unsafe-eval'` — inline scripts are signed
+  with a per-request nonce instead (`@talivioNonce`, and `@vite` tags get it
+  automatically through Laravel's Vite helper). A test asserts the generated
+  policy against TCSR's own two regexes, so the package cannot drift back into
+  producing a finding.
+- `style-src` keeps `'unsafe-inline'` deliberately: Alpine, Livewire and
+  friends write to `element.style`, which `style-src-attr` governs and a nonce
+  cannot sign. Inline style is not the risk inline script is.
+- `'strict-dynamic'` and report-only mode are both opt-in
+  (`TALIVIO_CSP_STRICT_DYNAMIC`, `TALIVIO_CSP_REPORT_ONLY`). Report-only is how
+  a product is meant to adopt this without breaking a page it forgot about.
+- Products add what they load through `talivio.security.csp.sources` (append to
+  a directive) or `.directives` (replace one — how the Shopify apps allow
+  `admin.shopify.com` to frame them). Every key also has a default inside the
+  middleware, so products that published `config/talivio.php` earlier keep
+  working without republishing it.
+- The middleware never overwrites a header the response already has (nginx
+  already sends some of them on these hosts) and sends no `X-Frame-Options` at
+  all: `frame-ancestors` covers clickjacking and can express what XFO cannot.
+- Register it with `prepend:`, not `append:` — outermost is the only position
+  from which it can see the queued `XSRF-TOKEN` cookie.
+
 ## 1.29.0 - 2026-09-05
 
 - **`DnsProbe` + `Support\DomainOwnership` — proving a customer owns a

@@ -27,6 +27,7 @@ use Talivio\Sdk\Http\Controllers\AccountDeletionController;
 use Talivio\Sdk\Http\Controllers\HumanTokenController;
 use Talivio\Sdk\Http\Controllers\SupportFormController;
 use Talivio\Sdk\Http\Controllers\TalivioAuthController;
+use Talivio\Sdk\Http\Security\Csp;
 use Talivio\Sdk\Human\HumanCheck;
 use Talivio\Sdk\Infra\Clients\Cloudflare;
 use Talivio\Sdk\Infra\Clients\Mailcow;
@@ -78,6 +79,20 @@ class TalivioServiceProvider extends ServiceProvider
         $this->app->singleton(HumanCheck::class);
 
         $this->registerInfra();
+        $this->registerSecurity();
+    }
+
+    /**
+     * İstek başına CSP nonce'u (Talivio\Sdk\Http\Security\Csp).
+     *
+     * `scoped`, `singleton` DEĞİL: nonce isteğe özgüdür ve iki isteğin aynı
+     * nonce'u paylaşması nonce'un tek işini (bu sayfaya ait olduğunu
+     * kanıtlamak) ortadan kaldırır. Octane altında `scoped` her istekte
+     * sıfırlanır, `singleton` süreç boyu yaşardı.
+     */
+    private function registerSecurity(): void
+    {
+        $this->app->scoped(Csp::class);
     }
 
     /**
@@ -155,6 +170,7 @@ class TalivioServiceProvider extends ServiceProvider
         $this->registerTranslations();
         $this->registerMailTheme();
         $this->registerPublishing();
+        $this->registerBladeDirectives();
 
         if ($this->app->runningInConsole()) {
             $this->commands([HeartbeatCommand::class, MigrationReportCommand::class, MigrationProbeCommand::class]);
@@ -359,6 +375,22 @@ class TalivioServiceProvider extends ServiceProvider
         } catch (Throwable) {
             // Never let telemetry wiring break the host app's boot.
         }
+    }
+
+    /**
+     * `@talivioNonce` — satır içi <script>'lerin CSP nonce'u.
+     *
+     *     <script @talivioNonce>...</script>
+     *
+     * Direktif olması, ürünlerin `{{ app(Csp::class)->nonce() }}` gibi bir
+     * ifadeyi 12 şablona kopyalamasından iyidir: nonce'un nasıl üretildiği
+     * değişirse şablonlara dokunmak gerekmez.
+     */
+    private function registerBladeDirectives(): void
+    {
+        $this->callAfterResolving('blade.compiler', function ($blade) {
+            $blade->directive('talivioNonce', fn () => "<?php echo app('".Csp::class."')->attribute(); ?>");
+        });
     }
 
     private function registerViews(): void
