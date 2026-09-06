@@ -119,6 +119,24 @@ class Csp
             $directives['script-src'][] = "'strict-dynamic'";
         }
 
+        /*
+         * ALPINE VERGİSİ. Alpine, `x-data="{ open: false }"` gibi ifadeleri
+         * `new Function` ile derler; 'unsafe-eval' olmadan Alpine kullanan
+         * her sayfa sessizce ölür. Livewire 4'ün CSP-güvenli Alpine derlemesi
+         * (`livewire.csp_safe`) bu ihtiyacı kaldırır AMA satır içi ifadeleri
+         * de kaldırır: her x-data'nın `Alpine.data()` ile kaydedilmiş bir
+         * bileşene dönmesi gerekir. Ürün o dönüşümü yapana kadarki dürüst
+         * ara durum bu bayrak.
+         *
+         * ⚠️ Bedeli 'unsafe-inline'ınkiyle aynı değil: 'unsafe-eval'
+         * enjekte edilmiş bir <script>'i çalıştırmaz — nonce hâlâ o kapıyı
+         * kapalı tutuyor. Yalnızca sayfanın KENDİ kodunun string'den kod
+         * üretmesine izin verir.
+         */
+        if (config('talivio.security.csp.unsafe_eval', false)) {
+            $directives['script-src'][] = "'unsafe-eval'";
+        }
+
         return $directives;
     }
 

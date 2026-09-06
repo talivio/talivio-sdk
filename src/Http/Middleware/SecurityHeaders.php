@@ -5,6 +5,7 @@ namespace Talivio\Sdk\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Vite;
+use Livewire\Livewire;
 use Symfony\Component\HttpFoundation\Response;
 use Talivio\Sdk\Http\Security\Csp;
 use Throwable;
@@ -42,7 +43,7 @@ class SecurityHeaders
          * <script>/<link> etiketlerine nonce'u kendisi basar, yoksa derlenmiş
          * paketler 'strict-dynamic' açıldığı anda susardı.
          */
-        $this->shareNonceWithVite();
+        $this->shareNonce();
 
         $response = $next($request);
 
@@ -99,17 +100,38 @@ class SecurityHeaders
         }
     }
 
-    private function shareNonceWithVite(): void
+    /**
+     * Nonce'u kendi <script> etiketini ÜRETEN katmanlara verir.
+     *
+     * Vite ve Livewire etiketlerini şablonda değil kendi içlerinde üretiyor;
+     * ürün onlara nonce ekleyemez. İkisi de bunun için bir kanca sunuyor ve
+     * SDK bu kancaları ürünlerin adına bağlıyor — yoksa CSP'yi açan her
+     * Livewire ürünü aynı hatayı (livewire'ın satır içi yapılandırma
+     * script'i susuyor) tek tek keşfederdi.
+     */
+    private function shareNonce(): void
     {
-        if (! $this->csp->enabled() || ! class_exists(Vite::class)) {
+        if (! $this->csp->enabled()) {
             return;
         }
 
+        $nonce = $this->csp->nonce();
+
         try {
-            Vite::useCspNonce($this->csp->nonce());
+            if (class_exists(Vite::class)) {
+                Vite::useCspNonce($nonce);
+            }
         } catch (Throwable) {
-            // Vite bu üründe kurulu değilse/başka biçimde yapılandırıldıysa
-            // güvenlik başlıkları yine de gönderilmeli.
+            // Bu katmanlar yoksa/başka biçimde yapılandırıldıysa güvenlik
+            // başlıkları yine de gönderilmeli.
+        }
+
+        try {
+            if (class_exists(Livewire::class)) {
+                Livewire::useScriptTagAttributes(['nonce' => $nonce]);
+            }
+        } catch (Throwable) {
+            // aynı gerekçe
         }
     }
 }

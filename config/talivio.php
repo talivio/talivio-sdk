@@ -87,6 +87,14 @@ return [
             // script etiketleri nonce'a geçtikten sonra açın.
             'strict_dynamic' => env('TALIVIO_CSP_STRICT_DYNAMIC', false),
 
+            // Alpine kullanan ürünler için: Alpine satır içi ifadeleri
+            // `new Function` ile derler, bu olmadan her x-data susar.
+            // Nonce sayesinde ENJEKTE EDİLMİŞ script yine çalışamaz; bu
+            // yalnızca sayfanın kendi kodunun string'den kod üretmesine
+            // izin verir. Kalıcı çözüm: ifadeleri `Alpine.data()`
+            // bileşenlerine taşıyıp `livewire.csp_safe`'i açmak.
+            'unsafe_eval' => env('TALIVIO_CSP_UNSAFE_EVAL', false),
+
             'report_uri' => env('TALIVIO_CSP_REPORT_URI'),
 
             // Bir yönergeye kaynak EKLER (çoğu ürünün ihtiyacı bu):

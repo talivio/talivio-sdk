@@ -648,6 +648,24 @@ CSP3 browsers ignore the origin allowlist in `script-src` entirely, so every
 `<script src>` without a nonce goes silent. Turn it on per product, after its
 script tags are all nonced.
 
+### Alpine and Livewire
+
+Livewire generates its own `<script>` tags, so the product cannot put a nonce on
+them; the middleware hands Livewire the nonce the same way it hands it to Vite.
+Nothing to do in the product.
+
+Alpine is the one real tax. It compiles inline expressions (`x-data="{ open:
+false }"`) with `new Function`, which needs `'unsafe-eval'` — without it every
+Alpine page dies silently. Set `TALIVIO_CSP_UNSAFE_EVAL=true` for those
+products. It is not the same cost as `'unsafe-inline'`: an injected `<script>`
+still cannot run, because it has no nonce. Only the page's own code gains the
+right to build code from a string.
+
+The way out is Livewire 4's CSP-safe Alpine build (`livewire.csp_safe`), but it
+does not merely remove the need for `'unsafe-eval'` — it removes inline
+expressions altogether, so every `x-data` has to become a registered
+`Alpine.data()` component first. Do that per product, then drop the flag.
+
 ## Infrastructure clients (domains, DNS, hosting, mail)
 
 `Talivio\Sdk\Infra` is the one place the platform talks to its vendors. Every

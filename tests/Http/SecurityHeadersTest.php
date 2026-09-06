@@ -144,6 +144,22 @@ class SecurityHeadersTest extends TestCase
             $this->get('https://localhost/probe')->headers->get('Content-Security-Policy'));
     }
 
+    /**
+     * Alpine kullanan ürünlerin ara durumu — açıkça istenmedikçe verilmez.
+     */
+    public function test_unsafe_eval_is_opt_in_and_does_not_bring_unsafe_inline_with_it(): void
+    {
+        config(['talivio.security.csp.unsafe_eval' => true]);
+
+        $csp = strtolower($this->get('https://localhost/probe')->headers->get('Content-Security-Policy'));
+        $scriptDirective = preg_match('/(?:^|;)\s*script-src([^;]*)/', $csp, $m) ? $m[1] : '';
+
+        $this->assertStringContainsString("'unsafe-eval'", $scriptDirective);
+        $this->assertStringContainsString("'nonce-", $scriptDirective);
+        $this->assertStringNotContainsString("'unsafe-inline'", $scriptDirective);
+        $this->assertDoesNotMatchRegularExpression('/script-src[^;]*(\*|https:)(\s|;|$)/', $csp);
+    }
+
     public function test_the_csp_can_be_switched_off_entirely(): void
     {
         config(['talivio.security.csp.enabled' => false]);

@@ -4,6 +4,21 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.31.0 - 2026-09-06
+
+- Livewire gets the nonce too. Livewire renders its own `<script>` tags, so a
+  product cannot put a nonce on them; the middleware now calls
+  `Livewire::useScriptTagAttributes()` alongside `Vite::useCspNonce()`. Without
+  this, every Livewire product would have discovered the same broken page on
+  its own.
+- `talivio.security.csp.unsafe_eval` (`TALIVIO_CSP_UNSAFE_EVAL`) — the honest
+  interim for products using Alpine, which compiles `x-data="{ open: false }"`
+  with `new Function`. It is not the cost `'unsafe-inline'` is: an injected
+  `<script>` still cannot run, because it carries no nonce. The way out is
+  Livewire 4's CSP-safe Alpine, which also removes inline expressions, so every
+  `x-data` must become an `Alpine.data()` component first — a per-product job,
+  not a flag.
+
 ## 1.30.0 - 2026-09-06
 
 - **`Http\Middleware\SecurityHeaders` + `Http\Security\Csp` — one
