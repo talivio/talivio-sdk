@@ -73,6 +73,61 @@ class FakesTest extends TestCase
         $this->assertSame('1000', $id);
     }
 
+    public function test_fake_host_created_sites_carry_the_ops_inventory_defaults(): void
+    {
+        $host = new FakeHost;
+
+        $site = $host->createSite('client.example', ['project_type' => 'wordpress', 'php_version' => '8.2', 'system_user' => 'client']);
+
+        $listed = $host->listSites()[0];
+
+        $this->assertSame($site['id'], $listed['id']);
+        $this->assertSame('client.example', $listed['domain']);
+        $this->assertSame('active', $listed['status']);
+        $this->assertSame('wordpress', $listed['project_type']);
+        $this->assertSame('8.2', $listed['php_version']);
+        $this->assertSame('client', $listed['system_user']);
+        $this->assertNull($listed['last_deploy_at']);
+        $this->assertSame(0, $listed['disk_usage_mb']);
+        $this->assertFalse($listed['has_repository']);
+        $this->assertSame('2026-01-01 00:00:00', $listed['created_at']);
+    }
+
+    public function test_fake_host_site_certificates_reflect_the_issued_state(): void
+    {
+        $host = new FakeHost;
+        $site = $host->createSite('client.example');
+
+        $this->assertSame([], $host->siteCertificates($site['id']));
+
+        $host->requestSiteCertificate($site['id'], ['client.example']);
+
+        $this->assertSame([[
+            'id' => 9000 + $site['id'],
+            'domains' => ['client.example'],
+            'status' => 'active',
+            'type' => 'letsencrypt',
+            'expires_at' => $host->certificateExpiresAt,
+        ]], $host->siteCertificates($site['id']));
+    }
+
+    public function test_fake_host_site_certificates_stay_pending_without_issue_on_request(): void
+    {
+        $host = new FakeHost;
+        $host->issueOnRequest = false;
+        $site = $host->createSite('client.example');
+
+        $host->requestSiteCertificate($site['id'], ['client.example']);
+
+        $this->assertSame([[
+            'id' => 9000 + $site['id'],
+            'domains' => ['client.example'],
+            'status' => 'pending',
+            'type' => 'letsencrypt',
+            'expires_at' => null,
+        ]], $host->siteCertificates($site['id']));
+    }
+
     public function test_the_fail_knob_makes_every_call_throw(): void
     {
         $dns = new FakeDns;

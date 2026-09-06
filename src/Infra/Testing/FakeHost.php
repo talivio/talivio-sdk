@@ -39,7 +39,7 @@ class FakeHost implements Host
     /** Set to a message to make every call throw. */
     public ?string $failWith = null;
 
-    /** @var list<array{id: int, domain: string, aliases: list<string>}> */
+    /** @var list<array{id: int, domain: string, aliases: list<string>, status: ?string, project_type: ?string, php_version: ?string, system_user: ?string, last_deploy_at: ?string, disk_usage_mb: ?int, has_repository: bool, created_at: ?string}> */
     public array $sites = [];
 
     /** @var list<int> */
@@ -53,6 +53,9 @@ class FakeHost implements Host
 
     /** @var array<int, list<string>> domains with an issued certificate per site */
     public array $siteIssued = [];
+
+    /** ISO-8601 expiry reported for every fake certificate; null = pending. */
+    public ?string $certificateExpiresAt = '2026-12-31T00:00:00.000000Z';
 
     protected int $nextSiteId = 500;
 
@@ -128,7 +131,19 @@ class FakeHost implements Host
         }
 
         $id = $this->nextSiteId++;
-        $this->sites[] = ['id' => $id, 'domain' => $domain, 'aliases' => []];
+        $this->sites[] = [
+            'id' => $id,
+            'domain' => $domain,
+            'aliases' => [],
+            'status' => 'active',
+            'project_type' => $options['project_type'] ?? 'laravel',
+            'php_version' => isset($options['php_version']) ? (string) $options['php_version'] : '8.4',
+            'system_user' => $options['system_user'] ?? 'ploi',
+            'last_deploy_at' => null,
+            'disk_usage_mb' => 0,
+            'has_repository' => false,
+            'created_at' => '2026-01-01 00:00:00',
+        ];
         $this->siteOptions[$id] = $options;
 
         return ['id' => $id, 'domain' => $domain];
@@ -163,6 +178,29 @@ class FakeHost implements Host
         $this->guard();
 
         return in_array(strtolower(trim($domain)), $this->siteIssued[(int) $siteId] ?? [], true);
+    }
+
+    public function siteCertificates(int|string $siteId): array
+    {
+        $this->guard();
+
+        $siteId = (int) $siteId;
+        $request = $this->siteCertificateRequests[$siteId] ?? null;
+
+        if ($request === null) {
+            return [];
+        }
+
+        $domains = $request['domains'];
+        $status = in_array($domains[0] ?? null, $this->siteIssued[$siteId] ?? [], true) ? 'active' : 'pending';
+
+        return [[
+            'id' => 9000 + $siteId,
+            'domains' => $domains,
+            'status' => $status,
+            'type' => 'letsencrypt',
+            'expires_at' => $status === 'active' ? $this->certificateExpiresAt : null,
+        ]];
     }
 
     protected function guard(): void

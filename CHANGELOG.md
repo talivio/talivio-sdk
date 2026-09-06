@@ -4,6 +4,18 @@ Releases are git tags on this repository (`vX.Y.Z`); products pin them through
 Composer. History before 1.25.0 is in the commit log, where each release commit
 carries its version in parentheses.
 
+## 1.33.0 - 2026-09-06
+
+- **`Host::listSites()` gains ops-inventory fields** (`status`, `project_type`,
+  `php_version`, `system_user`, `last_deploy_at`, `disk_usage_mb`,
+  `has_repository`, `created_at`) — talivio.com's admin panel syncs Ploi's
+  76-site inventory into a local table and needs more than id/domain/aliases.
+  Products must keep relying only on those first three.
+- **`Host::siteCertificates()`** — every certificate on a site (id, domains,
+  status, type, expiry), for saying "expires in 12 days" across the whole
+  inventory. Ploi has no server-level certificate endpoint, so this stays
+  per-site.
+
 ## 1.32.0 - 2026-09-06
 
 - **The middleware now sets the CSP unconditionally**, instead of yielding to a

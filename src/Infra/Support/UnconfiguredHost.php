@@ -67,6 +67,11 @@ final class UnconfiguredHost implements Host
         throw $this->exception();
     }
 
+    public function siteCertificates(int|string $siteId): array
+    {
+        throw $this->exception();
+    }
+
     private function exception(): NotConfiguredException
     {
         return NotConfiguredException::forService($this->service, $this->envKeys);

@@ -83,9 +83,11 @@ interface Host
 
     /**
      * Every site on the server, following pagination (the shared server
-     * carries 70+ sites — an unpaginated read silently misses most).
+     * carries 70+ sites — an unpaginated read silently misses most). The
+     * fields beyond id/domain/aliases are for an OPERATIONS inventory;
+     * products must only rely on the first three.
      *
-     * @return list<array{id: int, domain: string, aliases: list<string>}>
+     * @return list<array{id: int, domain: string, aliases: list<string>, status: ?string, project_type: ?string, php_version: ?string, system_user: ?string, last_deploy_at: ?string, disk_usage_mb: ?int, has_repository: bool, created_at: ?string}>
      *
      * @throws RuntimeException on any host-side failure
      */
@@ -133,4 +135,17 @@ interface Host
      * @throws RuntimeException on any host-side failure
      */
     public function siteCertificateIssued(int|string $siteId, string $domain): bool;
+
+    /**
+     * Every certificate on a site (created with createSite()) — what an
+     * operations inventory needs to say "expires in 12 days" for 70+ sites.
+     * `domains` are the hostnames the certificate covers, `status` is the
+     * host's own word (Ploi: active / pending / failed), `expires_at` an
+     * ISO-8601 string or null while pending.
+     *
+     * @return list<array{id: int, domains: list<string>, status: string, type: string, expires_at: ?string}>
+     *
+     * @throws RuntimeException on any host-side failure
+     */
+    public function siteCertificates(int|string $siteId): array;
 }

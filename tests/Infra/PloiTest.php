@@ -363,6 +363,62 @@ class PloiTest extends TestCase
         Http::assertSent(fn (Request $request) => $request['per_page'] === 50);
     }
 
+    public function test_list_sites_carries_the_ops_inventory_fields(): void
+    {
+        Http::fake([
+            self::SERVER.'/sites?*' => Http::response([
+                'data' => [[
+                    'id' => 1,
+                    'domain' => 'client.example',
+                    'aliases' => ['www.client.example'],
+                    'status' => 'active',
+                    'project_type' => 'laravel',
+                    'php_version' => 8.2,
+                    'system_user' => 'ploi',
+                    'last_deploy_at' => '2026-09-01 10:00:00',
+                    'disk_usage' => 512,
+                    'has_repository' => true,
+                    'created_at' => '2025-01-01 00:00:00',
+                ], [
+                    'id' => 2,
+                    'domain' => 'other.example',
+                    'aliases' => [],
+                ]],
+                'meta' => ['last_page' => 1],
+            ]),
+        ]);
+
+        $sites = $this->host()->listSites();
+
+        $this->assertSame([
+            'id' => 1,
+            'domain' => 'client.example',
+            'aliases' => ['www.client.example'],
+            'status' => 'active',
+            'project_type' => 'laravel',
+            'php_version' => '8.2',
+            'system_user' => 'ploi',
+            'last_deploy_at' => '2026-09-01 10:00:00',
+            'disk_usage_mb' => 512,
+            'has_repository' => true,
+            'created_at' => '2025-01-01 00:00:00',
+        ], $sites[0]);
+
+        $this->assertSame([
+            'id' => 2,
+            'domain' => 'other.example',
+            'aliases' => [],
+            'status' => null,
+            'project_type' => null,
+            'php_version' => null,
+            'system_user' => null,
+            'last_deploy_at' => null,
+            'disk_usage_mb' => null,
+            'has_repository' => false,
+            'created_at' => null,
+        ], $sites[1]);
+    }
+
     public function test_create_site_posts_the_domain_with_defaults_and_returns_the_new_id(): void
     {
         Http::fake([self::SERVER.'/sites' => Http::response(['data' => ['id' => 333, 'domain' => 'client.example']], 201)]);
@@ -407,5 +463,24 @@ class PloiTest extends TestCase
         Http::assertSent(fn (Request $request) => $request->method() === 'POST'
             && $request['certificate'] === 'other.example'
             && $request['webhook'] === 'https://talivio.com/hook');
+    }
+
+    public function test_site_certificates_maps_plois_certificate_list(): void
+    {
+        Http::fake([
+            self::SERVER.'/sites/333/certificates' => Http::response(['data' => [
+                ['id' => 5, 'domain' => 'a.com,www.a.com', 'status' => 'active', 'type' => 'letsencrypt', 'expires_at' => '2027-01-01T00:00:00.000000Z'],
+            ], 'links' => ['next' => null]]),
+        ]);
+
+        $certificates = $this->host()->siteCertificates(333);
+
+        $this->assertSame([[
+            'id' => 5,
+            'domains' => ['a.com', 'www.a.com'],
+            'status' => 'active',
+            'type' => 'letsencrypt',
+            'expires_at' => '2027-01-01T00:00:00.000000Z',
+        ]], $certificates);
     }
 }

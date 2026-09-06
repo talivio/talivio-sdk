@@ -694,6 +694,12 @@ being copied into each product.
 | `Infra\Contracts\Mail` | mailcow | the raw shared mail host: domains, mailboxes, aliases, quota and usage, the MX/SPF/DMARC/DKIM records a domain needs. Mailio and ops tooling only |
 | `Infra\Contracts\DnsProbe` | PHP's resolver | reads **public** DNS — A, CNAME, TXT — for "does the world see this yet?"; no credentials, no driver choice |
 
+`Host::listSites()` also carries ops-inventory fields (status, project_type,
+php_version, system_user, last_deploy_at, disk_usage_mb, has_repository,
+created_at) beyond id/domain/aliases, and `Host::siteCertificates()` lists
+every certificate on a site (domains, status, expiry) — Ploi has no
+server-level certificate endpoint, so an inventory reads them per site.
+
 Type-hint the contract and the package binds the configured driver. Missing
 credentials fail at resolution with a `NotConfiguredException` naming the
 environment variable; a product that wants to *show* "not configured" instead

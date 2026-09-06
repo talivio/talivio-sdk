@@ -266,6 +266,14 @@ class Ploi implements Host
                     'id' => (int) ($site['id'] ?? 0),
                     'domain' => (string) ($site['domain'] ?? ''),
                     'aliases' => array_values(array_map('strval', (array) ($site['aliases'] ?? []))),
+                    'status' => isset($site['status']) ? (string) $site['status'] : null,
+                    'project_type' => isset($site['project_type']) ? (string) $site['project_type'] : null,
+                    'php_version' => isset($site['php_version']) ? (string) $site['php_version'] : null,
+                    'system_user' => isset($site['system_user']) ? (string) $site['system_user'] : null,
+                    'last_deploy_at' => isset($site['last_deploy_at']) ? (string) $site['last_deploy_at'] : null,
+                    'disk_usage_mb' => isset($site['disk_usage']) ? (int) $site['disk_usage'] : null,
+                    'has_repository' => (bool) ($site['has_repository'] ?? false),
+                    'created_at' => isset($site['created_at']) ? (string) $site['created_at'] : null,
                 ];
             }
 
@@ -356,6 +364,17 @@ class Ploi implements Host
         }
 
         return false;
+    }
+
+    public function siteCertificates(int|string $siteId): array
+    {
+        return array_values(array_map(fn (array $certificate) => [
+            'id' => (int) ($certificate['id'] ?? 0),
+            'domains' => $this->coveredDomains($certificate),
+            'status' => (string) ($certificate['status'] ?? 'unknown'),
+            'type' => (string) ($certificate['type'] ?? ''),
+            'expires_at' => isset($certificate['expires_at']) ? (string) $certificate['expires_at'] : null,
+        ], $this->certificates($siteId)));
     }
 
     /**
